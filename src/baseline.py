@@ -208,7 +208,7 @@ def log_experiment(row: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     new = not path.exists()
     with path.open("a", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=list(row))
+        writer = csv.DictWriter(fh, fieldnames=list(row), lineterminator="\n")
         if new:
             writer.writeheader()
         writer.writerow(row)

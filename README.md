@@ -4,7 +4,7 @@
 
 ## Установка
 
-Нужен [uv](https://docs.astral.sh/uv/). На Windows:
+Нужен [uv](https://docs.astral.sh/uv/). Данные организаторов положить в `data/raw/`, в git они не попадают. На Windows:
 
 ```bash
 uv venv --python 3.12 .venv

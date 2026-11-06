@@ -5,6 +5,11 @@ models/
 *.parquet
 *.xlsx
 *.zip
+*.csv
+!reports/experiments.csv
+
+# В выводах ноутбуков остаются строки данных, и они плохо сливаются
+*.ipynb
 
 # Окружение и служебные файлы
 .venv/
