@@ -1,0 +1,29 @@
+# Данные
+numpy
+pandas
+pyarrow
+duckdb
+openpyxl
+
+# Статистика и модели
+scipy
+scikit-learn
+statsmodels
+lightgbm
+catboost
+xgboost
+optuna
+shap
+
+# Графики и показ
+matplotlib
+seaborn
+plotly
+streamlit
+
+# Ноутбуки и проверка
+jupyterlab
+ipykernel
+nbconvert
+pytest
+tqdm

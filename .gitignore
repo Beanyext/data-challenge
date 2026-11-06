@@ -1,0 +1,20 @@
+# Данные организаторов и результаты в git не кладём
+data/
+outputs/
+models/
+*.parquet
+*.xlsx
+*.zip
+
+# Окружение и служебные файлы
+.venv/
+__pycache__/
+.pytest_cache/
+.ipynb_checkpoints/
+catboost_info/
+
+# Секреты
+.env
+.env.*
+*.pem
+*.key
