@@ -388,3 +388,29 @@ def test_health_estimate_ignores_mock(client):
     _finished(client, "e-2", base, lambda k: "x", cost=0.06, seconds=22.0)
     est = client.get("/api/health").json()["estimate"]
     assert est == {"based_on": 2, "cost_per_dialog_usd": 0.05, "seconds_per_dialog": 20.0, "workers": est["workers"]}
+
+
+def test_load_saved_evaluations_without_model(tmp_path):
+    """Сохранённые оценки попадают в базу и видны через API; повторная загрузка не дублирует."""
+    from app.server.load_evals import load
+    from app.server.store import Store
+    evals = tmp_path / "evals"
+    evals.mkdir()
+    base = {"c01": "yes", "c02": "na", "c03": "na", "c04": 15, "c05": "yes", "c06": 7, "c07": "yes", "c08": "no"}
+    for cid in ("l-1", "l-2"):
+        (evals / f"{cid}.json").write_text(json.dumps({
+            "conversation_id": cid, "checklist_id": "freedom-chat", "checklist_version": 1, "provider": "anthropic",
+            "model": "claude-opus-5-5", "cost_usd": 0.05, "calls": [{"seconds": 20}],
+            "criteria": [{"criterion_id": k, "answer": v, "explanation": "Пояснение [2].", "evidence": [], "checked_range": None,
+                          "na_reason": None} for k, v in base.items()]}, ensure_ascii=False), encoding="utf-8")
+    (evals / "l-3.json").write_text(json.dumps({"conversation_id": "l-3", "error": "сбой"}), encoding="utf-8")
+    (evals / "summary.json").write_text("{}", encoding="utf-8")
+    db = tmp_path / "cqa.sqlite3"
+    stats = load(Store(db), evals, [chat("l-1"), chat("l-2")])
+    assert stats == {"loaded": 2, "skipped_existing": 0, "no_dialog": 0, "errors": 1, "unknown_checklist": 0}
+    assert load(Store(db), evals)["skipped_existing"] == 2
+    app = create_app(db_path=db, provider="mock", web_dir=False, data_dir=tmp_path, env_file=None)
+    with TestClient(app) as c:
+        rows = {r["conversation_id"]: r for r in c.get("/api/dialogs").json()}
+        assert rows["l-1"]["status"] == "evaluated" and rows["l-1"]["total"] is not None
+        assert c.get("/api/health").json()["estimate"]["cost_per_dialog_usd"] == 0.05
