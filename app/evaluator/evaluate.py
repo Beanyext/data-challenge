@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
-from app.evaluator.prompt import build_system_prompt, build_user_message, output_schema
+from app.evaluator.prompt import answers_by_criterion, build_system_prompt, build_user_message, output_schema
 from app.evaluator.providers import MockProvider
 from app.evaluator.validate import to_criteria, validate
 
@@ -33,6 +33,7 @@ def evaluate_dialog(record: dict, checklist: dict, provider, max_attempts: int =
     for attempt in range(max_attempts):
         message = user if attempt == 0 else user + _retry_note(raw, errors)
         raw, usage = provider.complete(system, message, schema)
+        raw = answers_by_criterion(raw)
         calls.append(usage)
         errors = validate(raw, record, checklist)
         if not errors:
