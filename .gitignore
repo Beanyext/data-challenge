@@ -7,6 +7,8 @@ models/
 *.zip
 *.csv
 !reports/experiments.csv
+# С флагом --values в профиле оказываются значения из данных
+reports/profile_*.md
 
 # В выводах ноутбуков остаются строки данных, и они плохо сливаются
 *.ipynb
