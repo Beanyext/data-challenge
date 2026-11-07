@@ -108,7 +108,7 @@ function visibleRows() {
 }
 function renderRows() {
   const rows = visibleRows();
-  ui.rows(rows,S.selected,S.rows.length);
+  ui.rows(rows,S.selected,S.rows.length,S.filters);
   $('#list-empty').hidden = rows.length > 0;
   $('#visible-count').textContent = t('Показано {visible} из {total}',{visible:rows.length,total:S.rows.length});
   $('#select-all').checked = rows.length > 0 && rows.every(r => S.selected.has(r.conversation_id));
@@ -246,6 +246,14 @@ document.addEventListener('click',async event=>{
   try {
     if(el.dataset.open) location.hash=`dialog/${encodeURIComponent(el.dataset.open)}`;
     else if(el.dataset.turn!==undefined) await highlightTurn(el.dataset.turn,el.dataset.rangeEnd);
+    else if(el.dataset.clearFilter && Object.hasOwn(S.filters,el.dataset.clearFilter)) {
+      const key=el.dataset.clearFilter;
+      S.filters[key]='';
+      const control=key==='query'?$('#search-dialogs'):document.querySelector(`[data-filter="${key}"]`);
+      if(control)control.value='';
+      renderRows();
+      control?.focus();
+    }
     else if(el.dataset.appeal) showAppeal(el.dataset.appeal);
     else if(el.dataset.criterionIndex!==undefined){S.criterionIndex=Number(el.dataset.criterionIndex);renderEditor();}
     else if(el.dataset.appealFilter){S.appealFilter=el.dataset.appealFilter;renderAppeals();}
@@ -262,7 +270,8 @@ document.addEventListener('click',async event=>{
       case 'upload':$('#upload-file').click();break;
       case 'audio':await loadAudio();break;
       case 'refresh-audio':S.audio=null;await loadAudio();break;
-      case 'reset-filters':S.filters={query:'',channel:'',language:'',status:''};renderDialogs();break;
+      case 'reset-filters':S.filters={query:'',channel:'',language:'',status:''};renderDialogs();$('#search-dialogs')?.focus();break;
+      case 'clear-selection':S.selected.clear();renderRows();$('#select-all')?.focus();break;
       case 'evaluate-selected':showEvaluate([...S.selected]);break;
       case 'evaluate-dialog':showEvaluate([S.dialog.conversation_id],$('#evaluation-checklist').value);break;
       case 'save-checklist':await saveChecklist(el);break;

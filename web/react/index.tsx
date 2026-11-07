@@ -9,6 +9,8 @@ import { MotionFrame, installInteractionMotion, animateElement } from './motion'
 import type { DialogRecord, Scale } from './types';
 import { translate as t, localizeMessage, localizeShell, reloadInLanguage, type Locale } from './i18n';
 import { LanguageSwitcher } from './language-switcher';
+import { ActiveFilters, SelectionSummary } from './list-tools';
+import type { Filters } from './types';
 export { translate, formatNumber, localizeMessage, getLocale } from './i18n';
 
 // React owns the view trees. The existing controller keeps API calls and decisions.
@@ -51,8 +53,10 @@ export const ui = {
   dialog: (props: ComponentProps<typeof DialogView>) => page(<DialogView {...props}/>),
   editor: (props: ComponentProps<typeof ChecklistEditor>) => page(<ChecklistEditor {...props}/>),
   appeals: (props: ComponentProps<typeof AppealsView>) => page(<AppealsView {...props}/>),
-  rows(rows: DialogRecord[], selected: Set<string>, totalRows: number) {
+  rows(rows: DialogRecord[], selected: Set<string>, totalRows: number, filters: Filters) {
     slot('dialog-rows', <DialogRows rows={rows} selected={new Set(selected)}/>);
+    slot('active-filters', <ActiveFilters filters={{ ...filters }}/>);
+    slot('list-selection', <SelectionSummary count={selected.size}/>);
     slot('list-empty', totalRows
       ? <EmptyState title={t('Ничего не найдено')} text={t('Измените запрос или сбросьте фильтры.')} actions={<button className="btn" data-action="reset-filters">{t('Сбросить фильтры')}</button>}/>
       : <EmptyState title={t('Добавьте первый диалог')} text={t('Импортируйте набор по group_id или загрузите транскрипт в JSON.')} actions={<button className="btn btn-primary" data-action="import">{t('Импорт набора')}</button>}/>);

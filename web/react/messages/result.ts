@@ -1,4 +1,8 @@
 export const resultMessages: Record<string, { en: string; kk: string }> = {
+  'Карта критериев': { en: 'Criteria overview', kk: 'Критерийлерге шолу' },
+  'Выберите критерий, чтобы перейти к обоснованию.': { en: 'Select a criterion to view its explanation.', kk: 'Негіздемесін көру үшін критерийді таңдаңыз.' },
+  'Нужна проверка': { en: 'Review needed', kk: 'Тексеру қажет' },
+  'Как рассчитано': { en: 'Score breakdown', kk: 'Ұпайдың есептелуі' },
   'Оценка по шкале': { en: 'Scale rating', kk: 'Шкала бойынша баға' },
   'Ступени шкалы': { en: 'Scale levels', kk: 'Шкала деңгейлері' },
   'Текущая оценка': { en: 'Current assessment', kk: 'Ағымдағы баға' },

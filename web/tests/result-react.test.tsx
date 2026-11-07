@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { EvaluationView } from '../react/result';
+import { JSDOM } from 'jsdom';
 const renderEvaluationView = props => renderToStaticMarkup(<EvaluationView {...props}/>);
 
 function fixture() {
@@ -136,4 +137,34 @@ test('absence of an evaluation and all-N/A results have distinct empty presentat
   const html = renderEvaluationView(data);
   assert.match(html, /Нет применимых критериев для расчёта/);
   assert.doesNotMatch(html, /result-score">0 /);
+});
+
+test('criterion overview preserves unknown criteria and separates violation, review and N/A', () => {
+  const data = fixture();
+  data.evaluation.criteria[2].answer = 'yes';
+  data.evaluation.criteria[2].needs_review = true;
+  data.evaluation.criteria[1].answer = 'na';
+  data.evaluation.criteria.push({ criterion_id: 'new:criterion/with spaces', answer: 'no' });
+  const dom = new JSDOM(renderEvaluationView(data));
+  const document = dom.window.document;
+  const buttons = [...document.querySelectorAll('.result-nav-item')];
+  assert.equal(buttons.length, 4);
+  for (const button of buttons) assert.ok(document.getElementById(button.getAttribute('aria-controls')));
+  assert.equal(document.querySelector('.result-nav-critical .result-nav-answer').textContent, 'Нарушение выявлено');
+  assert.equal(document.querySelector('.result-nav-critical .result-nav-review').textContent, 'Нужна проверка');
+  assert.equal(document.querySelector('.result-nav-na .result-nav-answer').textContent, 'Не применяется');
+  for (const id of ['scale', 'gross']) {
+    assert.equal(document.getElementById(`criterion-${id}`).querySelector('.result-calculation'), null);
+    assert.equal(document.getElementById(`criterion-${id}`).querySelector('.result-points'), null);
+  }
+  dom.window.close();
+  const unknown = fixture();
+  unknown.checklist = undefined;
+  unknown.evaluation.gross_error = true;
+  unknown.evaluation.criteria[2].answer = 'yes';
+  const missingDefinition = new JSDOM(renderEvaluationView(unknown));
+  assert.ok(missingDefinition.window.document.querySelector('.result-critical-banner'));
+  assert.equal(missingDefinition.window.document.querySelectorAll('.result-nav-neutral').length, 3);
+  assert.equal(missingDefinition.window.document.querySelector('.result-answer-success'), null, 'unknown yes cannot be classified as a positive answer');
+  missingDefinition.window.close();
 });

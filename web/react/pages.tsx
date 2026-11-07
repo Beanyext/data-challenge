@@ -3,6 +3,8 @@ import type { Appeal, Checklist, DialogRecord, Evaluation, Filters } from './typ
 import { Icon, EmptyState, channel, label, number } from './shared';
 import { Slot } from './slots';
 import { EvaluationView } from './result';
+import { useState } from 'react';
+import { ActiveFilters, DensitySwitch, readDensity, SelectionSummary } from './list-tools';
 import { translate as t } from './i18n';
 
 export function StatusBadge({ record }: { record: DialogRecord }) {
@@ -14,23 +16,26 @@ export function DialogRows({ rows, selected }: { rows: DialogRecord[]; selected:
     <td><input type="checkbox" data-select={record.conversation_id} aria-label={t('Выбрать {id}', { id: record.conversation_id })} defaultChecked={selected.has(record.conversation_id)}/></td>
     <td><button className="dialog-title" data-open={record.conversation_id}>{record.title || record.subject || record.transcript?.find(turn => turn.speaker === 'client')?.text || t('Диалог поддержки')}</button><span className="dialog-subtitle">{record.conversation_id}</span></td>
     <td><span className="channel-icon" aria-hidden="true"><Icon name={record.channel === 'voice call' ? 'phone' : 'dialogs'}/></span>{channel(record.channel)}</td>
-    <td><span className="badge">{record.language}</span></td><td><StatusBadge record={record}/>{' '}{record.gross_error && <span className="badge badge-red" title={t('Грубая ошибка')}>!</span>}</td>
+    <td><span className="badge">{record.language}</span></td><td><div className="row-statuses"><StatusBadge record={record}/>{record.gross_error && <span className="badge badge-red gross-error-badge"><Icon name="alert"/>{t('Грубая ошибка')}</span>}</div></td>
     <td className="score-cell">{number(record.total)} {typeof record.total === 'number' && <span>/ 100</span>}</td>
     <td><button className="icon-btn" data-open={record.conversation_id} aria-label={t('Открыть {id}', { id: record.conversation_id })}><Icon name="chevron"/></button></td>
   </tr>)}</>;
 }
 export function DialogsView({ rows, completedCount, average, filters }: { rows: DialogRecord[]; completedCount: number; average: number | null; filters: Filters }) {
+  const [density, setDensity] = useState(readDensity);
   const grossCount = rows.filter(row => row.gross_error).length;
   const stats = [{ title: 'Всего диалогов', value: rows.length, icon: 'dialogs', tone: '' }, { title: 'С оценкой', value: completedCount, icon: 'circleCheck', tone: 'green' }, { title: 'Средний балл', value: average, icon: 'chart', tone: '' }, { title: 'Грубые ошибки', value: grossCount, icon: 'alert', tone: grossCount ? 'red' : '' }];
   return <>
     <div className="page-heading" data-reveal><div><div className="eyebrow">{t('КАЧЕСТВО КЛИЕНТСКОГО СЕРВИСА')}</div><h1>{t('Диалоги')}</h1><p>{t('Оценки, доказательства и решения — в одном рабочем пространстве.')}</p></div><div className="actions"><button className="btn" data-action="import"><Icon name="download"/>{t('Импорт набора')}</button><button className="btn" data-action="upload"><Icon name="upload"/>{t('Загрузить JSON')}</button></div></div>
     <section className="stats-strip" aria-label={t('Сводка по диалогам')}>{stats.map(stat => <div className="stat" key={stat.title} data-reveal><span className="stat-label">{t(stat.title)}</span><span className="stat-icon"><Icon name={stat.icon}/></span><span className={`stat-value ${stat.tone}`}>{number(stat.value)}</span></div>)}</section>
-    <section className="panel" data-reveal><div className="panel-heading"><h2>{t('Все разговоры')} <span className="muted small">/ {rows.length}</span></h2><button id="evaluate-selected" className="btn btn-primary" data-action="evaluate-selected" disabled>{t('Оценить выбранные')} <Icon name="arrow-right"/></button></div>
-      <div className="filters"><label className="search-field"><span aria-hidden="true"><Icon name="search"/></span><span className="sr-only">{t('Поиск диалога')}</span><input id="search-dialogs" type="search" placeholder={t('Найти по ID или содержимому')} defaultValue={filters.query}/></label>
-        <label><span className="sr-only">{t('Канал')}</span><select data-filter="channel" defaultValue={filters.channel}><option value="">{t('Все каналы')}</option><option value="agent chat">{t('Чаты')}</option><option value="voice call">{t('Звонки')}</option></select></label>
-        <label><span className="sr-only">{t('Язык')}</span><select data-filter="language" defaultValue={filters.language}><option value="">{t('Все языки')}</option><option value="RU">{t('Русский')}</option><option value="KZ">{t('Қазақша')}</option><option value="EN">{t('English')}</option></select></label>
-        <label><span className="sr-only">{t('Статус оценки')}</span><select data-filter="status" defaultValue={filters.status}><option value="">{t('Все статусы')}</option><option value="completed">{t('С оценкой')}</option><option value="pending">{t('Без оценки')}</option><option value="gross">{t('Грубая ошибка')}</option></select></label>
-      </div><div className="table-scroll"><table><thead><tr><th data-select-label={t("\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u0432\u0441\u0435 \u0434\u0438\u0430\u043b\u043e\u0433\u0438")}><input id="select-all" type="checkbox" aria-label={t('Выбрать все видимые диалоги')}/></th><th>{t('Диалог')}</th><th>{t('Канал')}</th><th>{t('Язык')}</th><th>{t('Статус')}</th><th>{t('Балл')}</th><th><span className="sr-only">{t('Открыть')}</span></th></tr></thead><tbody id="dialog-rows"><Slot name="dialog-rows"/></tbody></table></div>
+    <section className="panel dialog-list" data-density={density} data-reveal><div className="panel-heading"><h2>{t('Все разговоры')} <span className="muted small">/ {rows.length}</span></h2><DensitySwitch value={density} onChange={setDensity}/></div>
+      <div className="filters"><label className="search-field"><span className="filter-label">{t('Поиск диалога')}</span><span className="search-input"><span aria-hidden="true"><Icon name="search"/></span><input id="search-dialogs" type="search" placeholder={t('Найти по ID или содержимому')} defaultValue={filters.query}/></span></label>
+        <label><span className="filter-label">{t('Канал')}</span><select data-filter="channel" defaultValue={filters.channel}><option value="">{t('Все каналы')}</option><option value="agent chat">{t('Чаты')}</option><option value="voice call">{t('Звонки')}</option></select></label>
+        <label><span className="filter-label">{t('Язык')}</span><select data-filter="language" defaultValue={filters.language}><option value="">{t('Все языки')}</option><option value="RU">{t('Русский')}</option><option value="KZ">{t('Қазақша')}</option><option value="EN">{t('English')}</option></select></label>
+        <label><span className="filter-label">{t('Статус оценки')}</span><select data-filter="status" defaultValue={filters.status}><option value="">{t('Все статусы')}</option><option value="completed">{t('С оценкой')}</option><option value="pending">{t('Без оценки')}</option><option value="gross">{t('Грубая ошибка')}</option></select></label>
+      </div><Slot name="active-filters" fallback={<ActiveFilters filters={filters}/>}/>
+      <div className="list-toolbar"><Slot name="list-selection" fallback={<SelectionSummary count={0}/>}/><button id="evaluate-selected" className="btn btn-primary" data-action="evaluate-selected" disabled>{t('Оценить выбранные')} <Icon name="arrow-right"/></button></div>
+      <div className="table-scroll" role="region" aria-label={t('Список диалогов')} tabIndex={0}><table><thead><tr><th data-select-label={t("\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u0432\u0441\u0435 \u0434\u0438\u0430\u043b\u043e\u0433\u0438")}><input id="select-all" type="checkbox" aria-label={t('Выбрать все видимые диалоги')}/></th><th>{t('Диалог')}</th><th>{t('Канал')}</th><th>{t('Язык')}</th><th>{t('Статус')}</th><th>{t('Балл')}</th><th><span className="sr-only">{t('Открыть')}</span></th></tr></thead><tbody id="dialog-rows"><Slot name="dialog-rows"/></tbody></table></div>
       <div id="list-empty" hidden><Slot name="list-empty"/></div><div className="table-foot"><span id="visible-count"/><span>{t('Оценка по выбранному чек-листу')}</span></div>
     </section>
   </>;

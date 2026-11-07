@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Appeal, Checklist, Criterion, CriterionResult, DialogRecord, Evaluation } from './types';
 import { Icon, label, number } from './shared';
 import { translate as t } from './i18n';
@@ -10,20 +11,53 @@ export interface EvaluationViewProps {
   demo?: boolean;
 }
 
-type CriterionTone = 'na' | 'review' | 'critical' | 'success' | 'attention';
+type CriterionTone = 'na' | 'review' | 'critical' | 'success' | 'attention' | 'neutral';
 type CriterionEntry = { item: CriterionResult; definition?: Criterion; index: number };
 type ResultGroup = { id: string; name?: string; entries: CriterionEntry[] };
 type ResultContext = { evaluation: Evaluation; appeals: Appeal[]; dialog?: DialogRecord | null };
 
 const answerLabel = (answer: unknown) => answer === 'yes' || answer === 'no' || answer === 'na' ? label(answer) : number(answer);
+const criterionAnswer = (item: CriterionResult, criterion?: Criterion) => criterion?.gross_error
+  ? item.answer === 'yes' ? t('Нарушение выявлено') : item.answer === 'no' ? t('Не выявлено') : answerLabel(item.answer)
+  : item.answer === 'na' ? t('Не применяется') : answerLabel(item.answer);
 
 // Presentation only: answers, weights and totals always come from the existing result.
 function criterionTone(item: CriterionResult, criterion?: Criterion): CriterionTone {
   if (item.answer === 'na') return 'na';
+  if (criterion?.gross_error && item.answer === 'yes') return 'critical';
   if (item.needs_review) return 'review';
+  if (!criterion) return 'neutral';
   if (criterion?.gross_error) return item.answer === 'yes' ? 'critical' : item.answer === 'no' ? 'success' : 'review';
   if (item.answer === 'yes' || typeof item.answer === 'number' && item.answer === criterion?.scale?.max) return 'success';
   return 'attention';
+}
+
+function ResultNavigator({ groups }: { groups: ResultGroup[] }) {
+  const [active, setActive] = useState<string | null>(null);
+  const visibleGroups = groups.filter(group => group.entries.length);
+  if (!visibleGroups.length) return null;
+  function navigate(id: string) {
+    const target = document.getElementById(`criterion-${id}`);
+    if (!target) return;
+    setActive(id);
+    target.focus({ preventScroll: true });
+    target.scrollIntoView({ block: 'start', behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  }
+  return <nav className="result-navigator" aria-label={t('Карта критериев')}>
+    <div className="result-navigator-heading"><span className="result-nav-symbol"><Icon name="list" /></span><div><h3>{t('Карта критериев')}</h3><p>{t('Выберите критерий, чтобы перейти к обоснованию.')}</p></div></div>
+    <div className="result-nav-groups">{visibleGroups.map(group => <div className="result-nav-group" key={group.id}>
+      <div className="result-nav-section">{group.name}</div>
+      <div className="result-nav-items">{group.entries.map(({ item, definition, index }) => {
+        const tone = criterionTone(item, definition);
+        return <button type="button" className={`result-nav-item result-nav-${tone}`} key={`${item.criterion_id}-${index}`} aria-controls={`criterion-${item.criterion_id}`} aria-current={active === item.criterion_id ? 'location' : undefined} onClick={() => navigate(item.criterion_id)}>
+          <span className="result-nav-number">{String(index + 1).padStart(2, '0')}</span>
+          <span className="result-nav-name">{definition?.title || item.criterion_id}{item.needs_review && <span className="result-nav-review">{t('Нужна проверка')}</span>}</span>
+          <span className="result-nav-answer">{criterionAnswer(item, definition)}</span>
+          <Icon name="chevron" />
+        </button>;
+      })}</div>
+    </div>)}</div>
+  </nav>;
 }
 
 function CriterionScale({ item, criterion }: { item: CriterionResult; criterion?: Criterion }) {
@@ -88,12 +122,12 @@ function ResultCriterion({ item, criterion, index, context }: { item: CriterionR
   const decision = appeals.findLast(appeal => appeal.evaluation_id === evaluation.id && appeal.criterion_id === item.criterion_id && appeal.decision);
   const tone = criterionTone(item, criterion);
   const gross = criterion?.gross_error;
-  const badge = gross ? item.answer === 'yes' ? t('Нарушение выявлено') : item.answer === 'no' ? t('Не выявлено') : answerLabel(item.answer) : item.answer === 'na' ? t('Не применяется') : answerLabel(item.answer);
+  const badge = criterionAnswer(item, criterion);
   const baseWeight = item.weight ?? criterion?.weight;
   const maxPoints = item.effective_weight ?? baseWeight;
   const points = item.points ?? item.score;
   const hasAdjustedWeight = Number.isFinite(item.effective_weight) && Number.isFinite(baseWeight) && item.effective_weight !== baseWeight;
-  return <article className={`criterion result-criterion result-criterion-${tone}`} id={`criterion-${item.criterion_id}`}>
+  return <article className={`criterion result-criterion result-criterion-${tone}`} id={`criterion-${item.criterion_id}`} tabIndex={-1}>
     <div className="criterion-head">
       <div className="result-criterion-title">
         <span className="result-criterion-index">{String(index + 1).padStart(2, '0')}</span>
@@ -107,7 +141,11 @@ function ResultCriterion({ item, criterion, index, context }: { item: CriterionR
       <span className="result-block-label">{t('Почему критерий не применяется')}</span>
       <p>{item.na_reason || t('Причина не указана в результате.')}</p>
       <span>{gross ? t('Неприменимость указана для отдельной отметки.') : t('Критерий исключён из итогового расчёта.')}</span>
-    </div> : gross ? null : <>
+    </div> : gross ? null : <div className="result-points"><span>{t('Баллы в итог')}</span><strong>{number(points)} <span>/ {number(maxPoints)}</span></strong></div>}
+    <div className="result-reason"><span className="result-block-label">{t('Обоснование')}</span><p>{item.explanation || t('Обоснование не получено.')}</p></div>
+    <CriterionEvidence item={item} transcriptLength={dialog?.transcript?.length || 0} />
+    {!gross && item.answer !== 'na' && <details className="result-calculation">
+      <summary><Icon name="chart" /><span>{t('Как рассчитано')}</span><Icon name="chevron" /></summary>
       <CriterionScale item={item} criterion={criterion} />
       <dl className="criterion-metrics">
         <div><dt>{t('Базовый вес')}</dt><dd>{number(baseWeight)}</dd></div>
@@ -115,9 +153,7 @@ function ResultCriterion({ item, criterion, index, context }: { item: CriterionR
         <div className="criterion-contribution"><dt>{t('Баллы в итог')}</dt><dd>{number(points)}<span> / {number(maxPoints)}</span></dd></div>
       </dl>
       {hasAdjustedWeight && <p className="result-weight-note">{t('Вес перераспределён с учётом неприменимых критериев.')}</p>}
-    </>}
-    <div className="result-reason"><span className="result-block-label">{t('Обоснование')}</span><p>{item.explanation || t('Обоснование не получено.')}</p></div>
-    <CriterionEvidence item={item} transcriptLength={dialog?.transcript?.length || 0} />
+    </details>}
     <CriterionRevision item={item} appeal={decision} />
     <div className="result-criterion-footer">
       <span>{gross ? t('Не входит в балльную оценку') : item.answer === 'na' ? t('N/A — не является ошибкой') : t('Оценка по выбранному чек-листу')}</span>
@@ -183,6 +219,7 @@ export function EvaluationView({ evaluation, checklist, appeals = [], dialog, de
       <span className="result-block-label">{t('Баллы по секциям')}</span>
       <div className="section-results">{ungroupedScores.map((section, index) => <span className="section-result" key={`${section.id}-${index}`}>{section.name || sections.find(candidate => candidate.id === section.id)?.name || section.id} <strong>{number(section.score)}</strong></span>)}</div>
     </div>}
+    <ResultNavigator groups={groups} />
     <div className="result-groups">{groups.filter(group => group.entries.length).map((group, index) => {
       const score = sectionScores.find(section => section.id === group.id);
       const critical = group.entries.some(entry => entry.definition?.gross_error);
