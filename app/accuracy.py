@@ -114,7 +114,7 @@ def log_experiment(path: Path, name: str, model: str, rep: dict) -> None:
     """Строка в reports/experiments.csv на каждую часть. Столбцы общие с журналом команды."""
     new = not path.exists()
     with path.open("a", encoding="utf-8", newline="") as f:
-        w = csv.writer(f)
+        w = csv.writer(f, lineterminator="\n")
         if new:
             w.writerow(["when", "git", "name", "model", "metric", "mean", "std", "split", "folds", "rows", "features", "seconds"])
         for part, r in rep.items():
