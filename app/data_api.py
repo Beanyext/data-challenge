@@ -1,12 +1,17 @@
 """Набор диалогов с API организаторов по group_id.
 
 Адрес берётся из CQA_API_URL в .env: в нём подпись sig, поэтому адрес не печатается,
-не пишется в журналы и не попадает в сообщения об ошибках."""
+не пишется в журналы и не попадает в сообщения об ошибках.
+
+    python -m app.data_api DEV --out data/raw/dev.json
+"""
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -67,3 +72,25 @@ def save_group(doc: dict, path: str | Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8")
     return path
+
+
+def main(argv: list[str] | None = None) -> int:
+    from app.evaluator.cli import load_env
+
+    p = argparse.ArgumentParser(description="Скачать набор диалогов с API организаторов")
+    p.add_argument("group_id", help="DEV или код контрольной группы")
+    p.add_argument("--out", required=True, help="куда сохранить ответ API, например data/raw/dev.json")
+    args = p.parse_args(argv)
+    load_env(Path(".env"))
+    try:
+        doc = fetch_group(args.group_id)
+    except DataApiError as e:
+        print(f"Ошибка: {e}", file=sys.stderr)
+        return 1
+    path = save_group(doc, args.out)
+    print(f"{len(doc['data']['records'])} диалогов сохранено в {path}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

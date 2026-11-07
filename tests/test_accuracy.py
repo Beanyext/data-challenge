@@ -3,7 +3,8 @@
 import json
 from pathlib import Path
 
-from app.accuracy import compare, report
+from app.accuracy import compare, evaluations_from_results, report
+from app.results.export import build_results, write_json
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECKLIST = json.loads((ROOT / "app/checklists/freedom_chat_v1.json").read_text(encoding="utf-8"))
@@ -39,3 +40,19 @@ def test_missing_evaluation_counts_as_miss():
     del evals["b"]
     rep = report(compare(gold, evals, records, CHECKLIST, "tune"), CHECKLIST, show_holdout=False)
     assert rep["tune"]["agreement"] == 7 / 16 and rep["tune"]["not_evaluated"] == 1
+
+
+def test_results_file_gives_same_numbers_as_evaluations(tmp_path):
+    """Замер по файлу сдачи из git совпадает с замером по папкам оценок, ошибка оценки остаётся промахом."""
+    gold, evals, records = setup()
+    evals["b"] = {"conversation_id": "b", "error": "модель не ответила"}
+    recs = [{**records[k], "transcript": [{"timestamp": "00:00", "speaker": "operator", "text": "Здравствуйте"}]} for k in "abh"]
+    for e in evals.values():
+        for c in e.get("criteria", []):
+            c.update(explanation="Пересказ оценки.", evidence=[{"turn": 0, "quote": "Здравствуйте"}])
+    doc, _ = build_results(recs, evals, CHECKLIST, team_name="Тест")
+    write_json(doc, tmp_path / "results.json")
+    from_file = evaluations_from_results(tmp_path / "results.json", CHECKLIST)
+    a = report(compare(gold, evals, records, CHECKLIST, "all"), CHECKLIST, show_holdout=True)
+    b = report(compare(gold, from_file, records, CHECKLIST, "all"), CHECKLIST, show_holdout=True)
+    assert a == b and b["tune"]["not_evaluated"] == 1 and b["holdout"]["agreement"] == 7 / 8

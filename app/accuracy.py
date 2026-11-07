@@ -6,6 +6,7 @@
 на ней запрос не настраиваем.
 
     python -m app.accuracy --evals outputs/eval/<папка> [--split tune|holdout|all] [--log имя-эксперимента]
+    python -m app.accuracy --results results/dev/results.json --split all
 """
 
 from __future__ import annotations
@@ -55,6 +56,25 @@ def compare(gold: dict, evaluations: dict, records: dict, checklist: dict, split
                     "unsure": c["id"] in (label.get("unsure") or []),
                 })
     return {"rows": rows, "dialogs": dialogs}
+
+
+def evaluations_from_results(path: str | Path, checklist: dict) -> dict:
+    """Ответы модели из файла сдачи results.json: он лежит в git, поэтому замер воспроизводится без вызова модели."""
+    from app.results.check import load_results_file
+    from app.results.export import criterion_code, from_value
+
+    by_code = {criterion_code(c): c["id"] for c in checklist["criteria"]}
+    out = {}
+    for r in load_results_file(path)["results"]:
+        if r.get("status") != "ok":
+            out[r["conversation_id"]] = {"conversation_id": r["conversation_id"], "error": r.get("error") or "error"}
+            continue
+        out[r["conversation_id"]] = {
+            "conversation_id": r["conversation_id"],
+            "criteria": [{"criterion_id": by_code[i["criterion_id"]], "answer": from_value(i["value"])}
+                         for i in r["criteria"] if i["criterion_id"] in by_code],
+        }
+    return out
 
 
 def _rate(rows: list[dict]) -> tuple[float | None, int]:
@@ -124,7 +144,9 @@ def log_experiment(path: Path, name: str, model: str, rep: dict) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Точность оценки против разметки reports/gold.json")
-    p.add_argument("--evals", nargs="+", required=True, help="папки с оценками, более поздняя важнее")
+    src = p.add_mutually_exclusive_group(required=True)
+    src.add_argument("--evals", nargs="+", help="папки с оценками, более поздняя важнее")
+    src.add_argument("--results", help="файл сдачи results.json вместо папок с оценками")
     p.add_argument("--data", default="data/raw/dev.json")
     p.add_argument("--checklist", default="app/checklists/freedom_chat_v1.json")
     p.add_argument("--gold", default="reports/gold.json")
@@ -137,7 +159,7 @@ def main(argv: list[str] | None = None) -> int:
     checklist = json.loads(Path(args.checklist).read_text(encoding="utf-8"))
     gold = json.loads(Path(args.gold).read_text(encoding="utf-8"))
     records = {r["conversation_id"]: r for r in load_records(args.data)}
-    evaluations = load_evaluations(args.evals, checklist)
+    evaluations = evaluations_from_results(args.results, checklist) if args.results else load_evaluations(args.evals, checklist)
     rep = report(compare(gold, evaluations, records, checklist, args.split), checklist, args.show_holdout)
     if not rep:
         print("Нет размеченных диалогов в выбранной части")
