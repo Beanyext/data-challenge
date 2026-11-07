@@ -1,4 +1,6 @@
 export const messageAnalysisMessages: Record<string, { en: string; kk: string }> = {
+  'Диалог и оценка': { en: 'Conversation and evaluation', kk: 'Диалог және бағалау' },
+  'Оценка': { en: 'Evaluation', kk: 'Бағалау' },
   'Нажмите на сообщение оператора, чтобы перейти к его разбору в оценке.': { en: 'Select an operator message to jump to its explanation in the evaluation.', kk: 'Бағалаудағы талдауға өту үшін оператор хабарламасын таңдаңыз.' },
   'Перейти к разбору сообщения оператора № {n}': { en: 'Go to the evaluation of operator message #{n}', kk: 'Оператордың № {n} хабарламасының талдауына өту' },
   'К разбору в оценке': { en: 'Go to evaluation details', kk: 'Бағалаудағы талдауға өту' },

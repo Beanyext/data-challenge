@@ -45,6 +45,8 @@ async function withWorkspace(narrow: boolean, run: (document: Document, root: Re
     Object.defineProperty(globalThis, key, { value, writable: true, configurable: true });
   }
   Object.defineProperty(dom.window, 'matchMedia', { value: (query: string) => ({ matches: query === '(prefers-reduced-motion: reduce)' || narrow && query === '(max-width: 1099px)', addEventListener() {}, removeEventListener() {} }) });
+  Object.defineProperty(dom.window, 'scrollY', { value: 0, configurable: true, writable: true });
+  dom.window.scrollTo = ((options: ScrollToOptions) => { Object.defineProperty(dom.window, 'scrollY', { value: options.top || 0, configurable: true, writable: true }); }) as typeof dom.window.scrollTo;
   const scrolled: HTMLElement[] = [];
   dom.window.HTMLElement.prototype.scrollIntoView = function () { scrolled.push(this); };
   const root = createRoot(dom.window.document.getElementById('root')!);
@@ -170,5 +172,97 @@ test('empty transcript stays empty and an unevaluated call loads no audio or eva
     assert.equal(document.querySelector('#call-audio, #message-inspector, dialog'), null);
     assert.equal(document.querySelector('#evaluation-panel .result-criterion'), null);
     assert.equal(scrolled.length, 0);
+  });
+});
+
+test('narrow tabs preserve mounted results, disclosure state and each pane position', async () => {
+  await withWorkspace(true, async (document, _root, win) => {
+    const transcriptPanel = document.getElementById('transcript-panel')!;
+    const evaluationPanel = document.getElementById('evaluation-panel')!;
+    const transcript = document.getElementById('transcript')!;
+    const dialogTab = document.getElementById('workspace-tab-dialog') as HTMLButtonElement;
+    const evaluationTab = document.getElementById('workspace-tab-evaluation') as HTMLButtonElement;
+    assert.equal(document.querySelector<HTMLElement>('[role="tablist"]')!.hidden, false);
+    assert.equal(transcriptPanel.hidden, false);
+    assert.equal(evaluationPanel.hidden, true);
+    assert.equal(dialogTab.tabIndex, 0);
+    assert.equal(evaluationTab.tabIndex, -1);
+    Object.defineProperty(win, 'scrollY', { value: 320, configurable: true, writable: true });
+    transcript.scrollTop = 71;
+    await act(async () => document.querySelector<HTMLButtonElement>('[data-inspect-turn="1"]')!.click());
+    assert.equal(transcriptPanel.hidden, true);
+    assert.equal(evaluationPanel.hidden, false);
+    assert.equal(evaluationTab.getAttribute('aria-selected'), 'true');
+    const criterion = document.querySelector<HTMLElement>('.result-criterion')!;
+    const calculation = criterion.querySelector<HTMLDetailsElement>('.result-calculation')!;
+    calculation.open = true;
+    Object.defineProperty(win, 'scrollY', { value: 640, configurable: true, writable: true });
+    evaluationPanel.scrollTop = 29;
+    await act(async () => dialogTab.click());
+    assert.equal(win.scrollY, 320);
+    assert.equal(transcript.scrollTop, 71);
+    await act(async () => evaluationTab.click());
+    assert.equal(win.scrollY, 640);
+    assert.equal(evaluationPanel.scrollTop, 29);
+    assert.equal(document.querySelector('.result-criterion'), criterion);
+    assert.equal(calculation.open, true);
+    assert.equal(criterion.querySelector('.result-row')!.getAttribute('aria-expanded'), 'true');
+    assert.equal(document.getElementById('transcript'), transcript);
+  });
+});
+
+test('reverse evidence navigation reveals the transcript before delegated handlers and no-match stays inline', async () => {
+  await withWorkspace(true, async (document) => {
+    const transcriptPanel = document.getElementById('transcript-panel')!;
+    const evaluationPanel = document.getElementById('evaluation-panel')!;
+    await act(async () => document.querySelector<HTMLButtonElement>('[data-inspect-turn="1"]')!.click());
+    const evidence = document.querySelector<HTMLButtonElement>('.result-criterion .evidence-link[data-turn="1"]')!;
+    assert.equal(evaluationPanel.hidden, false, 'control: evaluation is visible before the reverse jump');
+    let delegated = 0;
+    const listener = (event: Event) => {
+      if (event.target !== evidence) return;
+      delegated++;
+      assert.equal(transcriptPanel.hidden, false, 'legacy document handler must see a visible target');
+      assert.equal(evaluationPanel.hidden, true);
+      document.getElementById('turn-1')!.focus({ preventScroll: true });
+    };
+    document.addEventListener('click', listener);
+    try { await act(async () => evidence.click()); } finally { document.removeEventListener('click', listener); }
+    assert.equal(delegated, 1);
+    assert.equal(document.activeElement!.id, 'turn-1');
+    await act(async () => document.querySelector<HTMLButtonElement>('[data-inspect-turn="4"]')!.click());
+    assert.equal(transcriptPanel.hidden, false);
+    assert.equal(evaluationPanel.hidden, true);
+    assert.ok(document.querySelector('.message-navigation-note'));
+    assert.equal(document.querySelector('[role="dialog"], #message-inspector'), null);
+  });
+});
+
+test('tabs support arrows, Home and End while desktop keeps both panels available', async () => {
+  await withWorkspace(true, async (document) => {
+    const dialogTab = document.getElementById('workspace-tab-dialog') as HTMLButtonElement;
+    const evaluationTab = document.getElementById('workspace-tab-evaluation') as HTMLButtonElement;
+    const press = async (button: HTMLButtonElement, key: string) => act(async () => {
+      button.dispatchEvent(new document.defaultView!.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    });
+    dialogTab.focus();
+    await press(dialogTab, 'ArrowRight');
+    assert.equal(document.activeElement, evaluationTab);
+    assert.equal(evaluationTab.getAttribute('aria-selected'), 'true');
+    await press(evaluationTab, 'Home');
+    assert.equal(document.activeElement, dialogTab);
+    await press(dialogTab, 'End');
+    assert.equal(document.activeElement, evaluationTab);
+    await press(evaluationTab, 'ArrowLeft');
+    assert.equal(document.activeElement, dialogTab);
+    assert.equal(dialogTab.getAttribute('aria-selected'), 'true');
+  });
+  await withWorkspace(false, async (document) => {
+    assert.equal(document.querySelector<HTMLElement>('[role="tablist"]')!.hidden, true);
+    assert.equal(document.getElementById('transcript-panel')!.hidden, false);
+    assert.equal(document.getElementById('evaluation-panel')!.hidden, false);
+    await act(async () => document.querySelector<HTMLButtonElement>('[data-inspect-turn="1"]')!.click());
+    assert.equal(document.getElementById('transcript-panel')!.hidden, false);
+    assert.equal(document.getElementById('evaluation-panel')!.hidden, false);
   });
 });

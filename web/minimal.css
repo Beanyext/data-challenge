@@ -81,6 +81,11 @@
   .evidence-selected .result-reason { padding: 14px 16px; border-radius: 8px; background: #f0f7f3; box-shadow: inset 2px 0 #82ac94; }
   .evidence-selected .result-reason .result-block-label { color: #43664f; }
   .evidence-selected .result-evidence { border: 0; background: #f8faf9; }
+  .workspace-tabs { grid-column: 1 / -1; display: flex; gap: 4px; padding: 4px; background: #eaf0ec; border-radius: 8px; }
+  .workspace-tabs[hidden], .message-workspace>section[hidden] { display: none; }
+  .workspace-tab { flex: 1; min-height: 44px; padding: 8px 16px; border: 0; border-radius: 6px; background: transparent; color: #52665a; font: inherit; cursor: pointer; }
+  .workspace-tab[aria-selected=true] { color: #086447; background: #fff; font-weight: 600; box-shadow: 0 1px 3px rgb(23 53 43 / 8%); }
+  .workspace-tab:focus-visible { outline: 2px solid #087f5b; outline-offset: 2px; }
 
   @media (min-width: 851px) {
     .focus-mode .sidebar { width: 72px; padding-left: 12px; padding-right: 12px; }
