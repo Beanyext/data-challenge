@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { renderEvaluationView } from '../result-view.mjs';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { EvaluationView } from '../react/result';
+const renderEvaluationView = props => renderToStaticMarkup(<EvaluationView {...props}/>);
 
 function fixture() {
   return {

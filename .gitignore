@@ -19,6 +19,7 @@ reports/profile_*.md
 __pycache__/
 .pytest_cache/
 .playwright-mcp/
+node_modules/
 .ipynb_checkpoints/
 catboost_info/
 
