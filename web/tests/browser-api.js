@@ -135,6 +135,7 @@ async (originalPage) => {
     check(appeals[0].comment === comment, 'Appeal mock stores actual posted comment');
     check(!await page.evaluate(() => window.__apiUnsafe), 'API response text must remain escaped');
     await page.getByRole('button', { name: 'Рассмотреть', exact: true }).click();
+    check(await page.locator('.appeal-evidence').evaluate(node => node.open), 'Review opens the saved evidence');
     await page.getByRole('textbox', { name: 'Причина решения' }).fill('Подтверждено на учебной фикстуре.');
     await page.getByRole('button', { name: 'Сохранить решение', exact: true }).click();
     await waitForNode(() => counts.decisionPosts === 1, 'Appeal decision POST missing');
@@ -180,7 +181,7 @@ async (originalPage) => {
 
     listMode = 'error';
     await page.getByRole('link', { name: /Диалоги/ }).click();
-    await page.getByRole('heading', { name: 'Нет подключения к данным', exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'Не удалось загрузить раздел', exact: true }).waitFor();
     await page.getByText('Тестовый API временно недоступен.', { exact: true }).waitFor();
     check(!await page.locator('#demo-banner').isVisible(), 'HTTP failure must not enable demo');
     listMode = 'normal';
@@ -188,7 +189,7 @@ async (originalPage) => {
     await page.getByRole('heading', { name: 'Диалоги', exact: true }).waitFor();
     listMode = 'malformed';
     await page.getByRole('link', { name: 'Чек-листы', exact: true }).click();
-    await page.getByRole('heading', { name: 'Нет подключения к данным', exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'Не удалось загрузить раздел', exact: true }).waitFor();
     await page.getByText('Сервер вернул неожиданный формат списка. Проверьте контракт API.', { exact: true }).waitFor();
     check(!await page.locator('#demo-banner').isVisible(), 'Malformed API data must not enable demo');
     results.push('HTTP 503 and malformed API response show errors, retry works, no silent demo fallback');
