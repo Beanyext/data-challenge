@@ -7,8 +7,6 @@ models/
 *.zip
 *.csv
 !reports/experiments.csv
-# С флагом --values в профиле оказываются значения из данных
-reports/profile_*.md
 
 # В выводах ноутбуков остаются строки данных, и они плохо сливаются
 *.ipynb
@@ -19,7 +17,6 @@ reports/profile_*.md
 __pycache__/
 .pytest_cache/
 .ipynb_checkpoints/
-catboost_info/
 
 # Секреты
 .env
