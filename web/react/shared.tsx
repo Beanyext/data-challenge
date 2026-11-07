@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { translate as t, formatNumber } from './i18n';
 
 const symbols: Record<string, ReactNode> = {
   'dialogs': <><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z"/><path d="M8 9h8M8 13h5"/></>,
@@ -28,9 +29,9 @@ const symbols: Record<string, ReactNode> = {
 export function Icon({ name }: { name: string }) {
   return <svg className="ui-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">{symbols[name] || symbols.dialogs}</svg>;
 }
-export const number = (value: unknown): string => typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString('ru-RU', { maximumFractionDigits: 2 }) : '—';
-export const label = (value: unknown): string => ({ yes:'Да', no:'Нет', na:'N/A', open:'Открыта', confirmed:'Подтверждена', changed:'Пересмотрена', completed:'Оценён', done:'Оценён', evaluated:'Оценён', pending:'Без оценки', new:'Без оценки', queued:'В очереди', running:'В обработке', failed:'Ошибка' }[String(value)] ?? String(value ?? '—'));
-export const channel = (value: string) => value === 'voice call' ? 'Звонок' : 'Чат';
+export const number = formatNumber;
+export const label = (value: unknown): string => t({ yes:'Да', no:'Нет', na:'N/A', open:'Открыта', confirmed:'Подтверждена', changed:'Пересмотрена', completed:'Оценён', done:'Оценён', evaluated:'Оценён', pending:'Без оценки', new:'Без оценки', queued:'В очереди', running:'В обработке', failed:'Ошибка' }[String(value)] ?? String(value ?? '—'));
+export const channel = (value: string) => t(value === 'voice call' ? 'Звонок' : 'Чат');
 export function EmptyState({ title, text, actions }: { title: string; text: string; actions?: ReactNode }) {
   return <div className="empty-state"><div className="empty-symbol" aria-hidden="true"><Icon name="dialogs"/></div><h2>{title}</h2><p>{text}</p><div className="actions">{actions}</div></div>;
 }

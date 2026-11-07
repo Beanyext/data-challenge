@@ -12,30 +12,31 @@
   <link rel="stylesheet" href="./broker.css">
   <link rel="stylesheet" href="./forms-visual.css">
   <link rel="stylesheet" href="./polish.css">
+  <link rel="stylesheet" href="./language.css">
   <script src="./config.js"></script>
   <script type="module" src="./app.mjs"></script>
 </head>
 <body>
-  <a class="skip-link" href="#main">К содержимому</a>
-  <aside class="sidebar" aria-label="Главное меню">
-    <a class="brand" href="#dialogs" aria-label="Freedom CQA, диалоги"><img class="brand-logo" src="./assets/freedom-logo.svg" width="168" height="40" alt="Freedom"><span class="brand-caption">CONVERSATION QUALITY</span></a>
-    <div class="workspace-label">КОНТРОЛЬ КАЧЕСТВА <span>CQA</span></div>
+  <a class="skip-link" href="#main" data-i18n="К содержимому">К содержимому</a>
+  <aside class="sidebar" aria-label="Главное меню" data-i18n-aria="Главное меню">
+    <a class="brand" href="#dialogs" aria-label="Freedom CQA, диалоги" data-i18n-aria="Freedom CQA, диалоги"><img class="brand-logo" src="./assets/freedom-logo.svg" width="168" height="40" alt="Freedom"><span class="brand-caption">CONVERSATION QUALITY</span></a>
+    <div class="workspace-label"><span class="workspace-name" data-i18n="КОНТРОЛЬ КАЧЕСТВА">КОНТРОЛЬ КАЧЕСТВА</span> <span>CQA</span></div>
     <nav>
-      <a href="#dialogs" data-nav="dialogs"><span class="nav-icon" data-icon="dialogs"></span>Диалоги<span id="dialog-count" class="nav-count"></span></a>
-      <a href="#checklists" data-nav="checklists"><span class="nav-icon" data-icon="list"></span>Чек-листы</a>
-      <a href="#appeals" data-nav="appeals"><span class="nav-icon" data-icon="appeal"></span>Апелляции<span id="appeal-count" class="nav-count"></span></a>
+      <a href="#dialogs" data-nav="dialogs"><span class="nav-icon" data-icon="dialogs"></span><span data-i18n="Диалоги">Диалоги</span><span id="dialog-count" class="nav-count"></span></a>
+      <a href="#checklists" data-nav="checklists"><span class="nav-icon" data-icon="list"></span><span data-i18n="Чек-листы">Чек-листы</span></a>
+      <a href="#appeals" data-nav="appeals"><span class="nav-icon" data-icon="appeal"></span><span data-i18n="Апелляции">Апелляции</span><span id="appeal-count" class="nav-count"></span></a>
     </nav>
-    <div class="sidebar-bottom"><div class="workspace-signature"><span data-icon="shield"></span><span>Conversation<br><strong>Quality Analytics</strong></span></div><p>Прототип команды<br><span>Data Challenge 2026</span></p><button class="connection-button" data-action="settings"><span class="connection-dot" aria-hidden="true"></span><span id="connection-label">Подключение к серверу</span><span data-icon="settings"></span></button></div>
+    <div class="sidebar-bottom"><div class="workspace-signature"><span data-icon="shield"></span><span>Conversation<br><strong>Quality Analytics</strong></span></div><p><span class="prototype-label" data-i18n="Прототип команды">Прототип команды</span><br><span>Data Challenge 2026</span></p><button class="connection-button" data-action="settings"><span class="connection-dot" aria-hidden="true"></span><span id="connection-label">Подключение к серверу</span><span data-icon="settings"></span></button></div>
   </aside>
   <div class="app-shell">
-    <header class="topbar"><div><span class="topbar-parent">Рабочее пространство</span><span class="breadcrumb-sep" aria-hidden="true">/</span><span id="breadcrumb">Диалоги</span></div><div class="topbar-end"><span id="mode-label" class="mode-label">API команды</span><button class="icon-btn" data-action="settings" aria-label="Настройки подключения" title="Настройки подключения" data-icon="settings"></button><span class="avatar" title="Рабочее пространство без авторизации" aria-hidden="true">QA</span></div></header>
-    <div id="demo-banner" class="demo-banner" hidden><span><strong>Учебный пример.</strong> Вымышленные диалоги и оценки, модель не вызывается.</span><button data-action="settings">Подключить сервер <span aria-hidden="true">↗</span></button></div>
+    <header class="topbar"><div><span class="topbar-parent" data-i18n="Рабочее пространство">Рабочее пространство</span><span class="breadcrumb-sep" aria-hidden="true">/</span><span id="breadcrumb">Диалоги</span></div><div class="topbar-end"><span id="mode-label" class="mode-label">API команды</span><div id="language-switcher"></div><button class="icon-btn" data-action="settings" aria-label="Настройки подключения" title="Настройки подключения" data-i18n-aria="Настройки подключения" data-i18n-title="Настройки подключения" data-icon="settings"></button><span class="avatar" title="Рабочее пространство без авторизации" data-i18n-title="Рабочее пространство без авторизации" aria-hidden="true">QA</span></div></header>
+    <div id="demo-banner" class="demo-banner" hidden><span><strong data-i18n="Учебный пример.">Учебный пример.</strong> <span data-i18n="Вымышленные диалоги и оценки, модель не вызывается.">Вымышленные диалоги и оценки, модель не вызывается.</span></span><button data-action="settings"><span data-i18n="Подключить сервер">Подключить сервер</span> <span aria-hidden="true">↗</span></button></div>
     <div id="job-banner" class="job-banner" role="status" hidden></div>
     <main id="main" tabindex="-1"></main>
   </div>
   <div id="notifications" class="notifications" aria-live="polite" aria-atomic="true"></div>
   <dialog id="modal" aria-labelledby="modal-title"><div id="modal-content"></div></dialog>
   <input type="file" id="upload-file" accept=".json,application/json" hidden>
-  <noscript><p>Для работы CQA включите JavaScript в браузере.</p></noscript>
+  <noscript><p lang="ru">Для работы CQA включите JavaScript в браузере.</p><p lang="kk">CQA жұмыс істеуі үшін браузерде JavaScript қосыңыз.</p><p lang="en">Enable JavaScript in your browser to use CQA.</p></noscript>
 </body>
 </html>

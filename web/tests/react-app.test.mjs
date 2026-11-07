@@ -2,10 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
+import { storeLanguageDraft } from '../language-draft.mjs';
 
 test('built React interface preserves selection, filters, forms, evidence and appeal workflow', async () => {
   const html = await readFile('web/index.html', 'utf8');
-  const dom = new JSDOM(html, { url: 'http://localhost:8765/?demo=1', pretendToBeVisual: true });
+  const locale = process.env.CQA_TEST_LOCALE || 'ru';
+  const dom = new JSDOM(html, { url: `http://localhost:8765/?demo=1&lang=${locale}`, pretendToBeVisual: true });
   const { window } = dom;
   const saved = new Map();
   const timers = new Set();
@@ -16,7 +18,7 @@ test('built React interface preserves selection, filters, forms, evidence and ap
     timers.add(timer); return timer;
   };
   const trackedClearTimeout = timer => { timers.delete(timer); nativeClearTimeout(timer); };
-  for (const name of ['window','document','navigator','location','history','localStorage','sessionStorage','Element','HTMLElement','HTMLDetailsElement','HTMLInputElement','FormData','Event','MouseEvent','MutationObserver','getComputedStyle']) {
+  for (const name of ['window','document','navigator','location','history','localStorage','sessionStorage','Node','Element','HTMLElement','HTMLDetailsElement','HTMLInputElement','FormData','Event','MouseEvent','KeyboardEvent','MutationObserver','getComputedStyle']) {
     saved.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
     Object.defineProperty(globalThis, name, { value: window[name], writable: true, configurable: true });
   }
@@ -41,9 +43,54 @@ test('built React interface preserves selection, filters, forms, evidence and ap
   }
   let uiModule;
   try {
+    if (process.env.CQA_TEST_RESTORE) {
+      const { createApi } = await import('../api.mjs');
+      const api = createApi({demo:true});
+      const draft = {locale,route:'#checklists',filters:{query:'',channel:'',language:'',status:''},selected:[],forms:[],criterionIndex:0,appealFilter:'open'};
+      if (process.env.CQA_TEST_RESTORE === 'editor') {
+        const checklist = structuredClone((await api.listChecklists())[0]);
+        checklist.criteria[0].title = 'Незавершённый черновик';
+        checklist.criteria[0].answer_type = 'scale';
+        checklist.criteria[0].scale = {min:0,max:10,steps:[{value:NaN,label:'draft'}]};
+        checklist.criteria[0]._stepsText = 'x | Незавершённая строка';
+        draft.editor = checklist;
+      } else {
+        const record = (await api.listDialogs())[0];
+        const evaluation = await api.getEvaluation(record.evaluation_id);
+        const criterionId = evaluation.criteria[0].criterion_id;
+        draft.route = `#dialog/${record.conversation_id}`;
+        draft.modal = {title:'Оспорить оценку',formId:'appeal-form',contents:{kind:'appeal',criterionId,title:'Исходное название'}};
+        draft.forms = [{id:'appeal-form',fields:[{name:'comment',type:'textarea',value:'Черновик апелляции до смены языка',checked:false,disabled:false}]}];
+      }
+      window.history.replaceState(null,'',`?demo=1&lang=${locale}${draft.route}`);
+      storeLanguageDraft(draft,window.sessionStorage);
+    }
     await import('../app.mjs');
     uiModule = await import('../react-ui.js');
+    assert.equal(document.documentElement.lang, locale);
+    assert.equal(q('[data-nav="dialogs"] [data-i18n]').textContent, uiModule.translate('Диалоги'));
+    if (process.env.CQA_TEST_RESTORE === 'editor') {
+      await until(() => q('[data-criterion="title"]'), 'editor draft restored on language reload');
+      assert.equal(q('[data-criterion="title"]').value, 'Незавершённый черновик');
+      assert.equal(q('[data-criterion="steps"]').value, 'x | Незавершённая строка');
+      window.location.hash = 'dialogs';
+    } else if (process.env.CQA_TEST_RESTORE === 'modal') {
+      await until(() => q('#appeal-form textarea'), 'appeal draft reopened after language reload');
+      assert.equal(q('#appeal-form textarea').value, 'Черновик апелляции до смены языка');
+      assert.equal(q('#modal-title').textContent, uiModule.translate('Оспорить оценку'));
+      q('[data-action="close-modal"]').click();
+      window.location.hash = 'dialogs';
+    }
     await until(() => q('#dialog-rows')?.children.length === 6, 'initial six rows');
+    const languageTrigger = q('.language-trigger');
+    languageTrigger.click();
+    await until(() => q('#language-menu'), 'language menu opens');
+    assert.equal(document.activeElement.dataset.language, locale);
+    q('[data-language="'+locale+'"]').dispatchEvent(new window.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));
+    assert.notEqual(document.activeElement.dataset.language, locale);
+    document.activeElement.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+    await until(() => !q('#language-menu'), 'Escape closes language menu');
+    assert.equal(document.activeElement, languageTrigger);
     const firstCheckbox = q('[data-select]');
     firstCheckbox.click();
     assert.equal(q('#evaluate-selected').disabled, false);
@@ -92,7 +139,7 @@ test('built React interface preserves selection, filters, forms, evidence and ap
     const title = q('[data-criterion="title"]');
     const expectedTitle = title.value + ' — React';
     change('[data-criterion="title"]', expectedTitle, 'input');
-    assert.match(q('#dirty-label').textContent, /Есть изменения/);
+    assert.equal(q('#dirty-label').textContent, uiModule.translate('Есть изменения'));
     change('[data-criterion="answer_type"]', 'scale', 'input');
     assert.equal(q('[data-criterion="title"]').value, expectedTitle);
     change('[data-criterion="steps"]', '0 | Нет\n7 | Частично\n10 | Полностью', 'input');
@@ -103,7 +150,7 @@ test('built React interface preserves selection, filters, forms, evidence and ap
     q('[data-criterion-index="0"]').click();
     assert.equal(q('[data-criterion="title"]').value, expectedTitle);
     q('[data-action="save-checklist"]').click();
-    await until(() => q('#dirty-label')?.textContent === 'Сохранено', 'checklist saved');
+    await until(() => q('#dirty-label')?.textContent === uiModule.translate('Сохранено'), 'checklist saved');
     assert.equal(q('[data-criterion="title"]').value, expectedTitle);
     assert.equal(q('#editor-errors').textContent, '');
 
