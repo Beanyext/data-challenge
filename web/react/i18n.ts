@@ -3,10 +3,11 @@ import { formsMessages } from './messages/forms';
 import { pagesMessages } from './messages/pages';
 import { resultMessages } from './messages/result';
 import { errorMessages } from './messages/errors';
+import { reviewMessages } from './messages/review';
 
 export type Locale = 'ru' | 'kk' | 'en';
 export const LANGUAGE_KEY = 'cqa-ui-language';
-export const catalog = { ...formsMessages, ...pagesMessages, ...resultMessages, ...errorMessages, ...commonMessages };
+export const catalog = { ...formsMessages, ...pagesMessages, ...resultMessages, ...errorMessages, ...commonMessages, ...reviewMessages };
 export const isLocale = (value: unknown): value is Locale => value === 'ru' || value === 'kk' || value === 'en';
 export function readLocale(url: string, storage?: Pick<Storage, 'getItem'>): Locale {
   const query = new URL(url).searchParams.get('lang');

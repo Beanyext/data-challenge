@@ -9,6 +9,7 @@ import { MotionFrame, installInteractionMotion, animateElement } from './motion'
 import type { DialogRecord, Scale } from './types';
 import { translate as t, localizeMessage, localizeShell, reloadInLanguage, type Locale } from './i18n';
 import { LanguageSwitcher } from './language-switcher';
+import { FocusToggle } from './review-tools';
 import { ActiveFilters, SelectionSummary } from './list-tools';
 import type { Filters } from './types';
 export { translate, formatNumber, localizeMessage, getLocale } from './i18n';
@@ -39,6 +40,7 @@ function slot(name: string, element: ReactNode) { flushSync(() => setSlot(name, 
 export const ui = {
   language(beforeReload: (locale: Locale) => boolean, failedReload: () => void = () => {}) {
     localizeShell();
+    mount('workspace-tools', <FocusToggle/>);
     mount('language-switcher', <LanguageSwitcher onSelect={locale => reloadInLanguage(locale, { beforeReload: async value => {
       if (!beforeReload(value)) return false;
       const main = document.getElementById('main');

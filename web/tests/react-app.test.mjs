@@ -23,6 +23,12 @@ test('built React interface preserves selection, filters, forms, evidence and ap
     Object.defineProperty(globalThis, name, { value: window[name], writable: true, configurable: true });
   }
   window.scrollTo = () => {};
+  let printCalls = 0;
+  window.print = () => {
+    printCalls++;
+    window.dispatchEvent(new window.Event('beforeprint'));
+    window.dispatchEvent(new window.Event('afterprint'));
+  };
   window.HTMLElement.prototype.scrollIntoView = () => {};
   window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
   window.HTMLDialogElement.prototype.close = function () { this.open = false; };
@@ -65,6 +71,7 @@ test('built React interface preserves selection, filters, forms, evidence and ap
       window.history.replaceState(null,'',`?demo=1&lang=${locale}${draft.route}`);
       storeLanguageDraft(draft,window.sessionStorage);
     }
+    window.localStorage.setItem('cqa-focus-mode', 'true');
     await import('../app.mjs');
     uiModule = await import('../react-ui.js');
     assert.equal(document.documentElement.lang, locale);
@@ -82,6 +89,13 @@ test('built React interface preserves selection, filters, forms, evidence and ap
       window.location.hash = 'dialogs';
     }
     await until(() => q('#dialog-rows')?.children.length === 6, 'initial six rows');
+    assert.ok(document.documentElement.classList.contains('focus-mode'), 'focus preference restores on boot');
+    assert.equal(q('[data-focus-toggle]').getAttribute('aria-pressed'), 'true');
+    q('[data-focus-toggle]').click();
+    await until(() => !document.documentElement.classList.contains('focus-mode'), 'focus mode exits');
+    assert.equal(window.localStorage.getItem('cqa-focus-mode'), 'false');
+    q('[data-focus-toggle]').click();
+    await until(() => document.documentElement.classList.contains('focus-mode'), 'focus mode re-enters');
     const languageTrigger = q('.language-trigger');
     languageTrigger.click();
     await until(() => q('#language-menu'), 'language menu opens');
@@ -143,6 +157,33 @@ test('built React interface preserves selection, filters, forms, evidence and ap
     await until(() => q('.result-calculation').open, 'score breakdown expands');
     q('[data-turn]').click();
     assert.ok(q('.turn.highlight'));
+    assert.equal(q('.result-criterion.evidence-selected'), q('[data-turn]').closest('.result-criterion'));
+    const secondEvidence = [...document.querySelectorAll('[data-turn]')].find(button => button.closest('.result-criterion') !== q('.result-criterion.evidence-selected'));
+    if (secondEvidence) {
+      secondEvidence.click();
+      assert.equal(document.querySelectorAll('.result-criterion.evidence-selected').length, 1);
+      assert.equal(q('.result-criterion.evidence-selected'), secondEvidence.closest('.result-criterion'));
+      assert.equal(q('.turn.highlight').id, `turn-${secondEvidence.dataset.turn}`);
+    }
+    assert.ok(q('.review-summary'));
+    q('[data-back-to-map]').click();
+    assert.equal(document.activeElement.id, 'criteria-map');
+    assert.equal(window.location.hash, routeBeforeCriterion);
+    const openDetailsBeforePrint = [...document.querySelectorAll('details')].map(element => element.open);
+    q('#transcript').scrollTop = 123;
+    const highlightedBeforePrint = q('.turn.highlight').id;
+    q('[data-print-report]').click();
+    assert.equal(printCalls, 1);
+    window.dispatchEvent(new window.Event('beforeprint')); // Ctrl+P uses the same complete report.
+    window.dispatchEvent(new window.Event('afterprint'));
+    assert.deepEqual([...document.querySelectorAll('details')].map(element => element.open), openDetailsBeforePrint);
+    assert.equal(q('#transcript').scrollTop, 123);
+    assert.equal(q('.turn.highlight').id, highlightedBeforePrint);
+    assert.equal(window.location.hash, routeBeforeCriterion);
+    assert.ok(document.documentElement.classList.contains('focus-mode'));
+    assert.equal(document.querySelectorAll('.print-turn').length, document.querySelectorAll('#transcript .turn').length);
+    assert.equal(q('.print-report details'), null);
+    assert.equal(q('.print-report [id]'), null, 'report does not duplicate application IDs');
     const criterionId = q('[data-appeal]').dataset.appeal;
     q('[data-appeal]').click();
     assert.ok(q('#modal').open);

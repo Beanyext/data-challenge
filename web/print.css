@@ -1,0 +1,49 @@
+@layer print {
+  .print-report { display: none; }
+  @media print {
+    @page { size: A4; margin: 16mm 14mm; }
+    html, body { margin: 0 !important; padding: 0 !important; min-height: 0; background: #fff !important; color: #172b20; font-size: 10pt; }
+    .sidebar, .topbar, .skip-link, #demo-banner, #job-banner, #notifications, #modal, #upload-file { display: none !important; }
+    dialog::backdrop { display: none !important; }
+    .app-shell, .focus-mode .app-shell { margin: 0 !important; padding: 0 !important; }
+    main, .focus-mode main { max-width: none; padding: 0 !important; margin: 0; }
+    .dialog-workspace { display: none !important; }
+    .react-surface { display: contents; }
+    .print-report { display: block; width: auto; max-width: none; color: #172b20; background: #fff; line-height: 1.5; overflow: visible; overflow-wrap: anywhere; }
+    .print-report *, .print-report *::before, .print-report *::after { animation: none !important; transition: none !important; text-shadow: none; box-shadow: none; }
+    .print-report-heading { display: flex; align-items: center; justify-content: space-between; gap: 8mm; border-bottom: 2pt solid #087f5b; padding-bottom: 5mm; margin-bottom: 7mm; }
+    .print-report-heading img { width: 42mm; height: 10mm; object-fit: contain; }
+    .print-report-heading>span { font-size: 8pt; color: #4f6658; text-align: right; }
+    .print-report h1 { font-size: 22pt; line-height: 1.2; margin: 0 0 3mm; color: #103c2e; }
+    .print-report h2 { font-size: 14pt; line-height: 1.4; margin: 7mm 0 3mm; padding-bottom: 2mm; border-bottom: 1pt solid #ccdcd2; color: #103c2e; }
+    .print-report h3 { font-size: 12pt; line-height: 1.4; margin: 0 0 2mm; color: #173f2c; }
+    .print-report h4 { font-size: 9pt; line-height: 1.5; margin: 3mm 0 1mm; color: #3f5d4b; }
+    .print-report h1, .print-report h2, .print-report h3, .print-report h4, .print-section-name { break-after: avoid; }
+    .print-report p { margin: 1mm 0 3mm; font-size: 10pt; line-height: 1.55; orphans: 3; widows: 3; }
+    .print-report .print-report-subject { font-size: 12pt; margin-bottom: 5mm; }
+    .print-metadata { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm 8mm; margin: 5mm 0; }
+    .print-metadata>div { break-inside: avoid; }
+    .print-metadata dt { font-size: 8pt; color: #52695a; }
+    .print-metadata dd { margin: 1mm 0 0; font-size: 10pt; font-weight: 600; }
+    .print-summary { display: flex; align-items: center; gap: 18mm; padding: 5mm 0; margin: 5mm 0; border-top: 1pt solid #9fbdad; border-bottom: 1pt solid #9fbdad; break-inside: avoid; }
+    .print-summary>div>span { display: block; font-size: 9pt; color: #46624f; }
+    .print-summary strong { display: block; font-size: 27pt; line-height: 1.2; font-variant-numeric: tabular-nums; color: #125c3b; }
+    .print-summary small { font-size: 12pt; font-weight: 400; }
+    .print-report .print-notice { border: 1pt solid #647a6d; border-left-width: 3pt; padding: 3mm; margin: 4mm 0; }
+    .print-report .print-critical { border-color: #973e31; color: #7c2e24; }
+    .print-section-scores { margin: 2mm 0 6mm; }
+    .print-section-scores>div { display: flex; justify-content: space-between; gap: 5mm; padding: 2mm 0; border-bottom: .5pt solid #dce5df; break-inside: avoid; }
+    .print-section-scores dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .print-criterion { padding: 5mm 0; border-top: 1pt solid #ccdcd2; break-inside: auto; }
+    .print-report .print-section-name { margin: 0 0 1mm; font-size: 8pt; color: #52695a; }
+    .print-answer { break-after: avoid; }
+    .print-report .print-calculation { font-size: 9pt; }
+    .print-report blockquote { margin: 2mm 0 3mm; padding: 1mm 0 1mm 4mm; border: 0; border-left: 2pt solid #86ac95; background: transparent; font-size: 10pt; line-height: 1.55; color: #213d2c; white-space: pre-wrap; orphans: 3; widows: 3; }
+    .print-rule, .print-appeal { padding-left: 4mm; border-left: 1pt solid #b8cdbf; margin-top: 4mm; }
+    .print-transcript { break-before: page; }
+    .print-turn { padding: 2mm 0; border-bottom: .5pt solid #dce5df; break-inside: auto; }
+    .print-turn h4 { margin-top: 2mm; }
+    .print-turn p { white-space: pre-wrap; }
+    .print-footer { margin-top: 8mm; padding-top: 3mm; border-top: 1pt solid #8aa995; font-size: 8pt; color: #52695a; }
+  }
+}

@@ -25,6 +25,9 @@ const symbols: Record<string, ReactNode> = {
   'chevron': <><path d="m9 5 7 7-7 7"/></>,
   'rows': <><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18"/></>,
   'filter': <><path d="M3 5h18M6 12h12M9 19h6"/></>,
+  'panel-collapse': <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16m7-12-4 4 4 4"/></>,
+  'panel-expand': <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16m4-12 4 4-4 4"/></>,
+  'print': <><path d="M7 8V3h10v5M7 17H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-3"/><path d="M7 14h10v7H7zM17 11h1"/></>,
 };
 export function Icon({ name }: { name: string }) {
   return <svg className="ui-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">{symbols[name] || symbols.dialogs}</svg>;

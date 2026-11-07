@@ -119,10 +119,11 @@ function renderRows() {
 function renderDialog() {
   ui.dialog({record:S.dialog,evaluation:S.evaluation,checklist:checklistForEvaluation(),checklists:S.checklists,appeals:S.appeals,demo:S.demo,busy:S.busy});
 }
-async function highlightTurn(turn, end) {
-  document.querySelectorAll('.turn.highlight').forEach(el=>el.classList.remove('highlight'));
+async function highlightTurn(turn, end, source) {
   const first=Number(turn), last=end===undefined?first:Number(end);
-  if (!Number.isInteger(first)||!Number.isInteger(last)||first<0||last>=S.dialog.transcript.length) return;
+  if (!Number.isInteger(first)||!Number.isInteger(last)||first<0||last<first||!S.dialog?.transcript||last>=S.dialog.transcript.length) return;
+  document.querySelectorAll('.turn.highlight, .result-criterion.evidence-selected').forEach(el=>el.classList.remove('highlight','evidence-selected'));
+  source?.closest('.result-criterion')?.classList.add('evidence-selected');
   for(let i=first;i<=last;i++) $(`#turn-${i}`)?.classList.add('highlight');
   const target=$(`#turn-${first}`);target?.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'center'});target?.focus({preventScroll:true});
   if (S.dialog.channel==='voice call') {
@@ -245,7 +246,7 @@ document.addEventListener('click',async event=>{
   const el=event.target.closest('button, a[data-nav]');if(!el)return;
   try {
     if(el.dataset.open) location.hash=`dialog/${encodeURIComponent(el.dataset.open)}`;
-    else if(el.dataset.turn!==undefined) await highlightTurn(el.dataset.turn,el.dataset.rangeEnd);
+    else if(el.dataset.turn!==undefined) await highlightTurn(el.dataset.turn,el.dataset.rangeEnd,el);
     else if(el.dataset.clearFilter && Object.hasOwn(S.filters,el.dataset.clearFilter)) {
       const key=el.dataset.clearFilter;
       S.filters[key]='';

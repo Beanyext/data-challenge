@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Appeal, Checklist, Criterion, CriterionResult, DialogRecord, Evaluation } from './types';
 import { Icon, label, number } from './shared';
 import { translate as t } from './i18n';
+import { clearLinkedEvidence } from './review-tools';
 
 export interface EvaluationViewProps {
   evaluation?: Evaluation | null;
@@ -39,11 +40,12 @@ function ResultNavigator({ groups }: { groups: ResultGroup[] }) {
   function navigate(id: string) {
     const target = document.getElementById(`criterion-${id}`);
     if (!target) return;
+    clearLinkedEvidence();
     setActive(id);
     target.focus({ preventScroll: true });
     target.scrollIntoView({ block: 'start', behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   }
-  return <nav className="result-navigator" aria-label={t('Карта критериев')}>
+  return <nav className="result-navigator" id="criteria-map" tabIndex={-1} aria-label={t('Карта критериев')}>
     <div className="result-navigator-heading"><span className="result-nav-symbol"><Icon name="list" /></span><div><h3>{t('Карта критериев')}</h3><p>{t('Выберите критерий, чтобы перейти к обоснованию.')}</p></div></div>
     <div className="result-nav-groups">{visibleGroups.map(group => <div className="result-nav-group" key={group.id}>
       <div className="result-nav-section">{group.name}</div>
@@ -135,6 +137,7 @@ function ResultCriterion({ item, criterion, index, context }: { item: CriterionR
       </div>
       <span className={`result-answer result-answer-${tone}`}>{tone === 'success' ? <Icon name="check" /> : tone === 'critical' ? <Icon name="alert" /> : null}{badge}</span>
     </div>
+    <div className="linked-evidence-label"><Icon name="arrow-left"/>{t('Связанная реплика выделена')}</div>
     {item.needs_review && <div className="result-review-note">{t('Нужна проверка человеком. Ответ требует подтверждения.')}</div>}
     {gross && <p className="result-gross-caption">{t('Отмечается отдельно от итогового балла.')}</p>}
     {item.answer === 'na' ? <div className="result-na">
