@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="./workspace.css">
   <link rel="stylesheet" href="./review.css">
   <link rel="stylesheet" href="./ux.css">
+  <link rel="stylesheet" href="./minimal.css">
   <link rel="stylesheet" href="./print.css">
   <script src="./config.js"></script>
   <script type="module" src="./app.mjs"></script>
@@ -23,14 +24,13 @@
 <body>
   <a class="skip-link" href="#main" data-i18n="К содержимому">К содержимому</a>
   <aside class="sidebar" aria-label="Главное меню" data-i18n-aria="Главное меню">
-    <a class="brand" href="#dialogs" aria-label="Freedom CQA, диалоги" data-i18n-aria="Freedom CQA, диалоги"><img class="brand-mark" src="./assets/freedom-mark.svg" width="36" height="40" alt=""><img class="brand-logo" src="./assets/freedom-logo.svg" width="168" height="40" alt="Freedom"><span class="brand-caption">CONVERSATION QUALITY</span></a>
-    <div class="workspace-label"><span class="workspace-name" data-i18n="КОНТРОЛЬ КАЧЕСТВА">КОНТРОЛЬ КАЧЕСТВА</span> <span>CQA</span></div>
+    <a class="brand" href="#dialogs" aria-label="Freedom CQA, диалоги" data-i18n-aria="Freedom CQA, диалоги"><img class="brand-mark" src="./assets/freedom-mark.svg" width="36" height="40" alt=""><img class="brand-logo" src="./assets/freedom-logo.svg" width="168" height="40" alt="Freedom"></a>
     <nav>
       <a href="#dialogs" data-nav="dialogs" title="Диалоги" data-i18n-title="Диалоги"><span class="nav-icon" data-icon="dialogs"></span><span data-i18n="Диалоги">Диалоги</span><span id="dialog-count" class="nav-count"></span></a>
       <a href="#checklists" data-nav="checklists" title="Чек-листы" data-i18n-title="Чек-листы"><span class="nav-icon" data-icon="list"></span><span data-i18n="Чек-листы">Чек-листы</span></a>
       <a href="#appeals" data-nav="appeals" title="Апелляции" data-i18n-title="Апелляции"><span class="nav-icon" data-icon="appeal"></span><span data-i18n="Апелляции">Апелляции</span><span id="appeal-count" class="nav-count"></span></a>
     </nav>
-    <div class="sidebar-bottom"><div class="workspace-signature"><span data-icon="shield"></span><span>Conversation<br><strong>Quality Analytics</strong></span></div><p><span class="prototype-label" data-i18n="Прототип команды">Прототип команды</span><br><span>Data Challenge 2026</span></p><button class="connection-button" data-action="settings"><span class="connection-dot" aria-hidden="true"></span><span id="connection-label">Подключение к серверу</span><span data-icon="settings"></span></button></div>
+    <div class="sidebar-bottom"><p><span class="prototype-label" data-i18n="Прототип команды">Прототип команды</span><br><span>Data Challenge 2026</span></p><button class="connection-button" data-action="settings"><span class="connection-dot" aria-hidden="true"></span><span id="connection-label">Подключение к серверу</span><span data-icon="settings"></span></button></div>
   </aside>
   <div class="app-shell">
     <header class="topbar"><div><span class="topbar-parent" data-i18n="Рабочее пространство">Рабочее пространство</span><span class="breadcrumb-sep" aria-hidden="true">/</span><span id="breadcrumb">Диалоги</span></div><div class="topbar-end"><div id="workspace-tools"></div><div id="language-switcher"></div><button class="icon-btn" data-action="settings" aria-label="Настройки подключения" title="Настройки подключения" data-i18n-aria="Настройки подключения" data-i18n-title="Настройки подключения" data-icon="settings"></button></div></header>

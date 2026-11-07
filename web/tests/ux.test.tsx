@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { JSDOM } from 'jsdom';
 import { EvaluationView } from '../react/result';
-import { DialogRows, EstimateNote } from '../react/pages';
+import { DialogRows, DialogWorkspaceSummary, EstimateNote } from '../react/pages';
 import { PrintReport } from '../react/print-report';
 import { dialogTitle } from '../react/shared';
 import { setLocale, translate as t, translatePlural } from '../react/i18n';
@@ -44,12 +44,16 @@ test('turn numbers in explanations open message N-1; numbers outside the transcr
   assert.equal(document.querySelector('.result-row .turn-ref'), null, 'collapsed row shows plain numbers inside its button');
 });
 
-test('summary ring, section bars and lost points ordered by size with actions', () => {
-  const document = dom(renderToStaticMarkup(<EvaluationView {...fixture()}/>));
-  assert.equal(document.querySelector('.result-summary'), null);
-  assert.ok(document.querySelector('.result-ring.result-ring-low'), 'below 60 is red');
-  assert.equal(document.querySelector('.result-ring')!.getAttribute('aria-label'), 'Итоговый балл: 39,29 из 100');
-  assert.deepEqual([...document.querySelectorAll('.section-bar-name')].map(node => node.textContent), ['Начало', 'Решение'], 'sections without points are not drawn');
+test('one total summary, collapsed section bars and lost points ordered by size with actions', () => {
+  const data = fixture();
+  const document = dom(renderToStaticMarkup(<><DialogWorkspaceSummary evaluation={data.evaluation}/><EvaluationView {...data}/></>));
+  assert.equal(document.querySelectorAll('.review-summary-score').length, 1);
+  assert.equal(document.querySelector('.review-summary-score strong')!.textContent, '39,29 / 100');
+  assert.equal(document.querySelector('.result-ring'), null);
+  const sections = document.querySelector<HTMLDetailsElement>('.result-section-details')!;
+  assert.equal(sections.open, false, 'section breakdown is optional');
+  assert.equal(sections.querySelector('summary')!.textContent, 'Результаты секций');
+  assert.deepEqual([...sections.querySelectorAll('.section-bar-name')].map(node => node.textContent), ['Начало', 'Решение'], 'sections without points are not drawn');
   const rows = [...document.querySelectorAll('.loss-row')];
   assert.deepEqual(rows.map(row => row.getAttribute('data-criterion')), ['zero', 'part'], 'largest loss first; full, N/A and gross excluded');
   assert.equal(rows[0].querySelector('.loss-value')!.textContent, '−44,44');

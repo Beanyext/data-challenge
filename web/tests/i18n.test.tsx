@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { catalog, setLocale, translate, readLocale, reloadInLanguage, LANGUAGE_KEY, formatNumber } from '../react/i18n';
-import { DialogsView, ModalContents } from '../react/pages';
+import { DialogsView, DialogWorkspaceSummary, ModalContents } from '../react/pages';
 import { ChecklistEditor } from '../react/forms';
 import { EvaluationView } from '../react/result';
 import ts from 'typescript';
@@ -39,7 +39,7 @@ test('each locale renders translated UI and preserves supplied content', () => {
       setLocale(locale);
       const list = renderToStaticMarkup(<DialogsView rows={[]} stats={{total:0,completed:0,average:null,gross:0}} filters={{query:'draft',channel:'',language:'',status:''}}/>);
       assert.ok(list.includes(heading));
-      const result = renderToStaticMarkup(<EvaluationView evaluation={evaluation} checklist={checklist} dialog={{conversation_id:'d',channel:'agent chat',language:'RU',transcript:[{speaker:'client',text:'Исходная цитата'}]}}/>);
+      const result = renderToStaticMarkup(<><DialogWorkspaceSummary evaluation={evaluation}/><EvaluationView evaluation={evaluation} checklist={checklist} dialog={{conversation_id:'d',channel:'agent chat',language:'RU',transcript:[{speaker:'client',text:'Исходная цитата'}]}}/></>);
       assert.ok(result.includes(totalLabel), `${locale}: total label`);
       assert.ok(result.includes('Исходная цитата') && result.includes('Объяснение сервера') && result.includes('Мой критерий'));
       const editor = renderToStaticMarkup(<ChecklistEditor checklist={checklist} checklists={[checklist]} criterionIndex={0} dirty/>);

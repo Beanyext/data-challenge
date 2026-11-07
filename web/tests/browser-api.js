@@ -110,7 +110,7 @@ async (originalPage) => {
     await page.getByRole('button', { name: '＋ Добавить критерий', exact: true }).click();
     await page.locator('[data-criterion=title]').fill('Критерий API');
     await page.locator('[data-criterion=description]').fill('Правило новой версии, сохранённое тестовым сервером.');
-    await page.getByRole('button', { name: 'Сохранить версию ↗', exact: true }).click();
+    await page.getByRole('button', { name: 'Сохранить версию', exact: true }).click();
     await page.getByText('Сохранено', { exact: true }).waitFor();
     check(counts.checklistPosts === 1, 'Checklist saved exactly once');
     check((await page.locator('#choose-checklist').inputValue()) === 'api-server-assigned-id@1', 'Server-assigned checklist remains selected after save');
@@ -127,6 +127,8 @@ async (originalPage) => {
     const comment = 'Учебное обращение «API» & <script>window.__apiUnsafe=1</script>';
     await page.getByRole('textbox', { name: 'Почему вы не согласны' }).fill(comment);
     await page.getByRole('button', { name: 'Подать апелляцию', exact: true }).click();
+    await page.locator('#criterion-c01').getByRole('button', { name: 'Апелляция подана', includeHidden: true }).waitFor({ state: 'attached' });
+    if (await page.locator('#criterion-c01 .result-row').getAttribute('aria-expanded') === 'false') await page.locator('#criterion-c01 .result-row').click();
     await page.locator('#criterion-c01').getByRole('button', { name: 'Апелляция подана' }).waitFor();
     await page.getByRole('link', { name: /Апелляции/ }).click();
     await page.getByText(comment, { exact: true }).waitFor();
@@ -141,8 +143,8 @@ async (originalPage) => {
 
     await page.getByRole('link', { name: /Диалоги/ }).click();
     await page.getByRole('button', { name: 'Открыть api-qa-001', exact: true }).click();
-    await page.locator('#evaluation-checklist').selectOption('api-server-assigned-id');
     await page.locator('[data-action=evaluate-dialog]').click();
+    await page.locator('#evaluate-form select[name=checklistId]').selectOption('api-server-assigned-id');
     await page.getByRole('checkbox', { name: /Подтверждаю запуск AI-оценки/ }).check();
     await page.locator('#evaluate-form button[type=submit]').click();
     await firstPost;

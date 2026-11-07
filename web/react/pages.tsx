@@ -2,13 +2,13 @@ import type { ReactNode } from 'react';
 import type { Appeal, Checklist, DialogRecord, Evaluation, Filters, Health, ScoreSort } from './types';
 import { Icon, EmptyState, channel, dialogTitle, label, number } from './shared';
 import { Slot } from './slots';
-import { EvaluationView } from './result';
 import { useState } from 'react';
 import { ActiveFilters, DensitySwitch, readDensity, SelectionSummary } from './list-tools';
-import { PrintButton, ReviewSummary } from './review-tools';
+import { PrintButton } from './review-tools';
 import { PrintReport } from './print-report';
+import { TranscriptWorkspace } from './transcript';
 import { translate as t, translatePlural, formatDecimal } from './i18n';
-import { plainTurnRefs, scoreTone, turnTime } from './text';
+import { plainTurnRefs, scoreTone } from './text';
 
 export function StatusBadge({ record }: { record: DialogRecord }) {
   const status = record.status || (record.evaluation_id ? 'completed' : 'pending');
@@ -79,17 +79,23 @@ export function DialogsView({ rows, stats, filters, sort = null }: { rows: Dialo
   </>;
 }
 
+export function DialogWorkspaceSummary({ evaluation }: { evaluation: Evaluation }) {
+  const criteria = Array.isArray(evaluation.criteria) ? evaluation.criteria : [];
+  return <aside className="review-summary dialog-summary" aria-label={t('Краткая сводка оценки')}>
+    <div className="review-summary-score"><span>{t('Итоговый балл')}</span><strong>{number(evaluation.total)}<span> / 100</span></strong></div>
+    <div className="review-summary-statuses">
+      {evaluation.total == null && <span className="review-summary-empty">{t('Нет применимых критериев для расчёта')}</span>}
+      {evaluation.gross_error && <span className="badge badge-red"><Icon name="alert"/>{t('Грубая ошибка')}</span>}
+      {criteria.some(item => item.needs_review) && <span className="badge badge-amber">{t('Нужна проверка')}</span>}
+    </div>
+  </aside>;
+}
 export function DialogView({ record, evaluation, checklist, checklists, appeals, demo, busy }: { record: DialogRecord; evaluation: Evaluation | null; checklist?: Checklist; checklists: Checklist[]; appeals: Appeal[]; demo: boolean; busy: boolean }) {
-  const roles: Record<string, string> = { operator: t('Оператор'), client: t('Клиент'), bot: t('Бот'), system: t('Система') };
-  const transcript = record.transcript || [];
   return <><div className="dialog-workspace">
     <a href="#dialogs" className="back-link"><Icon name="arrow-left"/> {t('Все диалоги')}</a>
-    <div className="detail-heading" data-reveal><div><h1>{dialogTitle(record, 'Карточка диалога')}</h1><div className="detail-meta"><span className="muted small mono">{record.conversation_id}</span><span className="badge">{channel(record.channel)}</span><span className="badge">{record.language}</span><StatusBadge record={{ ...record, evaluation_id: evaluation?.id, total: evaluation?.total }}/></div></div><div className="detail-actions"><PrintButton/><label><span className="sr-only">{t('Чек-лист для оценки')}</span><select id="evaluation-checklist" defaultValue={evaluation?.checklist_id}>{checklists.map(item => <option key={`${item.id}@${item.version}`} value={item.id}>{item.name} · v{item.version}</option>)}</select></label><button className="btn btn-primary" data-action="evaluate-dialog" disabled={busy || !checklists.length}>{t(evaluation ? 'Оценить заново' : 'Оценить диалог')} <Icon name="arrow-right"/></button></div></div>
-    {evaluation && <ReviewSummary evaluation={evaluation}/>}
-    <div className="split-view detail-top"><section className="panel" data-reveal><div className="panel-heading"><h2>{t('Транскрипт')}</h2><span className="muted small">{t('{count} реплик', { count: transcript.length })}</span></div>
-      {record.channel === 'voice call' && <div className="audio-block" id="audio-block"><Slot name="audio-block" fallback={<><button className="btn btn-small" data-action="audio">{t('Загрузить запись')}</button><p className="audio-caption">{t('Запись загружается по свежей ссылке.')}</p></>}/></div>}
-      <div className="quiet-line">{t('Оценивается оператор. Бот и система дают контекст.')}</div><div className="transcript" id="transcript">{transcript.map((turn, index) => <article id={`turn-${index}`} className={`turn turn-${Object.hasOwn(roles, turn.speaker) ? turn.speaker : 'system'}`} tabIndex={-1} key={index}><div className="turn-meta"><strong>{roles[turn.speaker] || turn.speaker}</strong><span>№ {index + 1}{turnTime(turn) && ` · ${turnTime(turn)}`}</span><span className="turn-evidence-label">{t('Доказательство')}</span></div><p>{turn.text}</p></article>)}</div>
-    </section><section className="panel" id="evaluation-panel" data-reveal><EvaluationView evaluation={evaluation} checklist={checklist} appeals={appeals} dialog={record} demo={demo}/></section></div>
+    <div className="detail-heading" data-reveal><div><h1>{dialogTitle(record, 'Карточка диалога')}</h1><div className="detail-meta"><span className="muted small mono">{record.conversation_id}</span><span className="badge">{channel(record.channel)}</span><span className="badge">{record.language}</span><StatusBadge record={{ ...record, evaluation_id: evaluation?.id, total: evaluation?.total }}/></div></div><div className="detail-actions"><PrintButton/><input type="hidden" id="evaluation-checklist" value={checklists.find(item => item.id === evaluation?.checklist_id)?.id || checklists[0]?.id || ''}/><button className="btn btn-primary" data-action="evaluate-dialog" disabled={busy || !checklists.length}>{t(evaluation ? 'Оценить заново' : 'Оценить диалог')} <Icon name="arrow-right"/></button></div></div>
+    {evaluation && <DialogWorkspaceSummary evaluation={evaluation}/>}
+    <TranscriptWorkspace key={record.conversation_id} record={record} evaluation={evaluation} checklist={checklist} appeals={appeals} demo={demo}/>
   </div><PrintReport record={record} evaluation={evaluation} checklist={checklist} appeals={appeals} demo={demo}/></>;
 }
 export function LoadingView() { return <div className="panel loading" aria-label={t('Загрузка')} aria-busy="true"><div className="skeleton wide"/><div className="skeleton"/><div className="skeleton"/><div className="skeleton wide"/></div>; }

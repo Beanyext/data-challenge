@@ -2,8 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { EvaluationView } from '../react/result';
+import { DialogWorkspaceSummary } from '../react/pages';
 import { JSDOM } from 'jsdom';
 const renderEvaluationView = props => renderToStaticMarkup(<EvaluationView {...props}/>);
+const renderEvaluationWorkspace = props => renderToStaticMarkup(<><DialogWorkspaceSummary evaluation={props.evaluation}/><EvaluationView {...props}/></>);
 
 function fixture() {
   return {
@@ -26,7 +28,7 @@ function fixture() {
 test('presentation preserves provided scores, weights and configuration without recalculation', () => {
   const data = fixture();
   const before = structuredClone(data);
-  const html = renderEvaluationView(data);
+  const html = renderEvaluationWorkspace(data);
   assert.match(html, /87,63/);
   assert.match(html, /12,34/);
   assert.match(html, /17,63/);
@@ -64,7 +66,7 @@ test('a gross violation is independently visible beside an unchanged high score'
   data.evaluation.total = 99.9;
   data.evaluation.gross_error = true;
   data.evaluation.criteria[2].answer = 'yes';
-  const html = renderEvaluationView(data);
+  const html = renderEvaluationWorkspace(data);
   assert.match(html, /99,9/);
   assert.match(html, /result-critical-banner/);
   assert.match(html, /Нарушение выявлено/);
@@ -130,16 +132,42 @@ test('review comparison uses original values including zero and preserves appeal
   assert.match(html, /Итоговая оценка/);
 });
 
+test('an identical original total alone does not imply a review, but a recorded decision does', () => {
+  const data = fixture();
+  data.evaluation.original_total = data.evaluation.total;
+  assert.doesNotMatch(renderEvaluationView(data), /result-total-revision/);
+  data.appeals = [{ evaluation_id: 'other-evaluation', criterion_id: 'scale', status: 'confirmed', decision: { answer: 7, reason: 'Решение по другой оценке' } }];
+  assert.doesNotMatch(renderEvaluationView(data), /result-total-revision/);
+  data.appeals = [{ evaluation_id: 'e1', criterion_id: 'scale', status: 'confirmed', decision: { answer: 7, reason: 'Ответ подтверждён' } }];
+  const html = renderEvaluationView(data);
+  assert.match(html, /result-total-revision/);
+  assert.match(html, /Ответ подтверждён/);
+});
+
+test('a decision stored on the criterion and an original zero total each retain the review summary', () => {
+  const data = fixture();
+  data.evaluation.original_total = data.evaluation.total;
+  data.evaluation.criteria[1].decision = { status: 'confirmed', answer: 7, reason: 'Решение из сохранённой оценки' };
+  assert.match(renderEvaluationView(data), /result-total-revision/);
+  delete data.evaluation.criteria[1].decision;
+  assert.doesNotMatch(renderEvaluationView(data), /result-total-revision/);
+  data.evaluation.original_total = 0;
+  const html = renderEvaluationView(data);
+  assert.match(html, /result-total-revision/);
+  assert.match(html, /Исходная оценка<\/span><strong>0/);
+});
+
 test('absence of an evaluation and all-N/A results have distinct empty presentations', () => {
   assert.match(renderEvaluationView({ evaluation: null }), /Оценка ещё не выполнена/);
   const data = fixture();
   data.evaluation.total = null;
-  const html = renderEvaluationView(data);
+  const html = renderEvaluationWorkspace(data);
   assert.match(html, /Нет применимых критериев для расчёта/);
-  assert.doesNotMatch(html, /result-score">0 /);
+  const document = new JSDOM(html).window.document;
+  assert.equal(document.querySelector('.review-summary-score strong').textContent, '— / 100');
 });
 
-test('criterion overview preserves unknown criteria and separates violation, review and N/A', () => {
+test('criterion rows preserve unknown criteria and separate violation, review and N/A', () => {
   const data = fixture();
   data.evaluation.criteria[2].answer = 'yes';
   data.evaluation.criteria[2].needs_review = true;
@@ -147,12 +175,19 @@ test('criterion overview preserves unknown criteria and separates violation, rev
   data.evaluation.criteria.push({ criterion_id: 'new:criterion/with spaces', answer: 'no' });
   const dom = new JSDOM(renderEvaluationView(data));
   const document = dom.window.document;
-  const buttons = [...document.querySelectorAll('.result-nav-item')];
+  const map = document.getElementById('criteria-map');
+  assert.equal(map.getAttribute('role'), 'region');
+  assert.equal(map.getAttribute('tabindex'), '-1');
+  const buttons = [...map.querySelectorAll('.result-row')];
   assert.equal(buttons.length, 4);
-  for (const button of buttons) assert.ok(document.getElementById(button.getAttribute('aria-controls')));
-  assert.equal(document.querySelector('.result-nav-critical .result-nav-answer').textContent, 'Нарушение выявлено');
-  assert.equal(document.querySelector('.result-nav-critical .result-nav-review').textContent, 'Нужна проверка');
-  assert.equal(document.querySelector('.result-nav-na .result-nav-answer').textContent, 'Не применяется');
+  for (const button of buttons) {
+    assert.equal(button.getAttribute('aria-expanded'), 'false');
+    assert.ok(document.getElementById(button.getAttribute('aria-controls')).hasAttribute('hidden'));
+  }
+  assert.equal(document.querySelector('.result-criterion-critical .result-answer').textContent, 'Нарушение выявлено');
+  assert.equal(document.querySelector('.result-criterion-critical .result-row-review').textContent, 'Нужна проверка');
+  assert.equal(document.querySelector('.result-criterion-na .result-answer').textContent, 'Не применяется');
+  assert.equal(document.getElementById('criterion-new:criterion/with spaces').querySelector('.result-row-title').textContent, 'new:criterion/with spaces');
   for (const id of ['scale', 'gross']) {
     assert.equal(document.getElementById(`criterion-${id}`).querySelector('.result-calculation'), null);
     assert.equal(document.getElementById(`criterion-${id}`).querySelector('.result-points'), null);
@@ -164,7 +199,7 @@ test('criterion overview preserves unknown criteria and separates violation, rev
   unknown.evaluation.criteria[2].answer = 'yes';
   const missingDefinition = new JSDOM(renderEvaluationView(unknown));
   assert.ok(missingDefinition.window.document.querySelector('.result-critical-banner'));
-  assert.equal(missingDefinition.window.document.querySelectorAll('.result-nav-neutral').length, 3);
+  assert.equal(missingDefinition.window.document.querySelectorAll('.result-criterion-neutral').length, 3);
   assert.equal(missingDefinition.window.document.querySelector('.result-answer-success'), null, 'unknown yes cannot be classified as a positive answer');
   missingDefinition.window.close();
 });
