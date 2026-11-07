@@ -1,4 +1,7 @@
 export const pagesMessages: Record<string, { en: string; kk: string }> = {
+  'Импорт по группе': { en: 'Import by group', kk: 'Топ бойынша импорттау' },
+  'Загрузить файл': { en: 'Upload file', kk: 'Файл жүктеу' },
+  'Есть апелляция': { en: 'Has an appeal', kk: 'Апелляция бар' },
   'Плотность таблицы': { en: 'Table density', kk: 'Кесте тығыздығы' },
   'Обычный': { en: 'Comfortable', kk: 'Қалыпты' },
   'Компактный': { en: 'Compact', kk: 'Ықшам' },

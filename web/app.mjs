@@ -110,7 +110,8 @@ function renderDialogs() {
 }
 function visibleRows() {
   const f = S.filters;
-  const rows = S.rows.filter(r => (!f.language || r.language === f.language) && (!f.channel || r.channel === f.channel) && (!f.query || `${r.conversation_id} ${nameForRow(r)} ${(r.transcript || []).map(t => t.text).join(' ')}`.toLocaleLowerCase().includes(f.query.toLocaleLowerCase())) && (!f.status || (f.status === 'gross' ? r.gross_error : f.status === 'completed' ? typeof r.total === 'number' : !r.evaluation_id)));
+  const statusMatches = r => !f.status || ({ gross:!!r.gross_error, completed:typeof r.total === 'number', pending:!r.evaluation_id, review:!!r.needs_review, appeal:(r.open_appeals ?? 0)>0, failed:r.status==='error'||r.status==='failed' })[f.status];
+  const rows = S.rows.filter(r => (!f.language || r.language === f.language) && (!f.channel || r.channel === f.channel) && (!f.query || `${r.conversation_id} ${nameForRow(r)} ${(r.transcript || []).map(t => t.text).join(' ')}`.toLocaleLowerCase().includes(f.query.toLocaleLowerCase())) && statusMatches(r));
   if (!S.sort) return rows;
   // Stable sort by score; conversations without a score stay at the end in both directions.
   const direction = S.sort === 'asc' ? 1 : -1;
@@ -124,6 +125,7 @@ function renderRows() {
   $('#select-all').checked = rows.length > 0 && rows.every(r => S.selected.has(r.conversation_id));
   $('#select-all').indeterminate = rows.some(r => S.selected.has(r.conversation_id)) && !$('#select-all').checked;
   $('#evaluate-selected').disabled = !S.selected.size || S.busy;
+  $('#selection-toolbar').hidden = !S.selected.size;
   $('#evaluate-selected').textContent = S.selected.size ? t('Оценить выбранные ({count}) ↗',{count:S.selected.size}) : t('Оценить выбранные ↗');
 }
 function renderDialog() {
