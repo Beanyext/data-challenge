@@ -7,12 +7,16 @@ import math
 from fractions import Fraction
 from pathlib import Path
 
-from app.results.export import MODES, SCHEMA_VERSION, criterion_code, from_value, leaks_quote, transcript_grams
+from app.results.export import MODES, SCHEMA_VERSION, criterion_code, from_value, is_mock_model, leaks_quote, transcript_grams
 from app.scoring import ScoringError, normalize_answer, score
 
 
 def _is_number(v) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def _extra_fields(value: dict, allowed: set[str], where: str) -> list[str]:
+    return [f"{where}: есть поля вне формата сдачи"] if value.keys() - allowed else []
 
 
 def _check_value(c: dict, value) -> str | None:
@@ -29,18 +33,24 @@ def _check_value(c: dict, value) -> str | None:
     return None
 
 
-def check_results(doc: object, records: list[dict], checklist: dict, expected: int | None = None) -> list[str]:
+def check_results(doc: object, records: list[dict], checklist: dict, expected: int | None = None, *, allow_mock: bool = False) -> list[str]:
     """Список ошибок. Пустой список — файл можно сдавать."""
     errs: list[str] = []
     if not isinstance(doc, dict):
         return ["корень файла должен быть объектом"]
+    errs += _extra_fields(doc, {"schema_version", "team_name", "model", "results"}, "корень файла")
     if doc.get("schema_version") != SCHEMA_VERSION:
         errs.append(f"schema_version должен быть {SCHEMA_VERSION!r}")
     if not isinstance(doc.get("team_name"), str) or not doc["team_name"].strip():
         errs.append("нет team_name")
     model = doc.get("model")
-    if not isinstance(model, dict) or model.get("mode") not in MODES or not str(model.get("name") or "").strip():
+    if isinstance(model, dict):
+        errs += _extra_fields(model, {"mode", "name"}, "model")
+    if (not isinstance(model, dict) or model.get("mode") not in MODES
+            or not isinstance(model.get("name"), str) or not model["name"].strip()):
         errs.append(f"model должен быть {{mode: {'|'.join(MODES)}, name: непустая строка}}")
+    elif not allow_mock and is_mock_model(model["name"]):
+        errs.append("model.name указывает тестовый режим: такие результаты сдавать нельзя")
     results = doc.get("results")
     if not isinstance(results, list):
         return errs + ["results должен быть массивом"]
@@ -55,7 +65,14 @@ def check_results(doc: object, records: list[dict], checklist: dict, expected: i
         if not isinstance(r, dict):
             errs.append(f"{where}: не объект")
             continue
+        allowed = {"conversation_id", "status", "criteria", "score"}
+        if r.get("status") == "error":
+            allowed.add("error")
+        errs += _extra_fields(r, allowed, where)
         cid = r.get("conversation_id")
+        if not isinstance(cid, str) or not cid.strip():
+            errs.append(f"{where}: conversation_id должен быть непустой строкой")
+            continue
         where = f"{where} {cid}"
         if cid not in by_id:
             errs.append(f"{where}: такого conversation_id нет в наборе")
@@ -65,7 +82,8 @@ def check_results(doc: object, records: list[dict], checklist: dict, expected: i
         seen.add(cid)
         status = r.get("status")
         if status == "error":
-            if r.get("criteria") != [] or r.get("score") is not None or not str(r.get("error") or "").strip():
+            if (r.get("criteria") != [] or r.get("score") is not None
+                    or not isinstance(r.get("error"), str) or not r["error"].strip()):
                 errs.append(f"{where}: у ошибки должны быть criteria: [], score: null и причина в error")
             continue
         if status != "ok":
@@ -84,13 +102,16 @@ def _check_ok(where: str, r: dict, record: dict, checklist: dict, crit_by_code: 
     if not isinstance(items, list):
         return [f"{where}: criteria должен быть массивом"]
     codes = [i.get("criterion_id") if isinstance(i, dict) else None for i in items]
-    if sorted(map(str, codes)) != sorted(crit_by_code) or len(set(codes)) != len(codes):
+    if (any(not isinstance(code, str) or not code.strip() for code in codes)
+            or sorted(codes) != sorted(crit_by_code) or len(set(codes)) != len(codes)):
         errs.append(f"{where}: нужны все критерии ровно по разу: {', '.join(crit_by_code)}")
     n_turns = len(record.get("transcript") or [])
     grams = transcript_grams(record.get("transcript") or [])
     answers = {}
     for i in items:
-        if not isinstance(i, dict) or i.get("criterion_id") not in crit_by_code:
+        if isinstance(i, dict):
+            errs += _extra_fields(i, {"criterion_id", "value", "rationale", "evidence_turns"}, f"{where} критерий")
+        if not isinstance(i, dict) or not isinstance(i.get("criterion_id"), str) or i["criterion_id"] not in crit_by_code:
             continue
         c = crit_by_code[i["criterion_id"]]
         problem = _check_value(c, i.get("value"))
@@ -106,6 +127,8 @@ def _check_ok(where: str, r: dict, record: dict, checklist: dict, crit_by_code: 
         if not isinstance(turns, list) or any(not isinstance(t, int) or isinstance(t, bool) or not 1 <= t <= n_turns for t in turns):
             errs.append(f"{where} {c['id']}: evidence_turns — номера реплик от 1 до {n_turns}")
     sc = r.get("score")
+    if isinstance(sc, dict):
+        errs += _extra_fields(sc, {"final_score", "critical_flag"}, f"{where} score")
     if not isinstance(sc, dict) or not _is_number(sc.get("final_score")) or not isinstance(sc.get("critical_flag"), bool):
         return errs + [f"{where}: score должен быть {{final_score: число, critical_flag: true/false}}"]
     final = sc["final_score"]

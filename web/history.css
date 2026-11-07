@@ -15,8 +15,44 @@
   .history-metadata dd { margin: 3px 0 0; overflow-wrap: anywhere; }
   .history-score strong { font-size: 20px; font-variant-numeric: tabular-nums; }
   .history-row.is-current { background: var(--green-light); border-radius: 8px; padding: 16px 10px; }
+  .evaluation-comparison { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--line); min-width: 0; }
+  .evaluation-comparison h3 { margin: 0 0 8px; font-size: 18px; }
+  .comparison-controls { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) auto; gap: 12px; align-items: end; margin: 18px 0; }
+  .comparison-controls label { min-width: 0; }
+  .comparison-controls select { min-width: 0; max-width: 100%; min-height: 44px; text-overflow: ellipsis; }
+  .comparison-choice { overflow-wrap: anywhere; font-weight: 400; }
+  .comparison-result { min-width: 0; }
+  .comparison-columns { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .comparison-run { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 16px; background: var(--bg); min-width: 0; overflow-wrap: anywhere; }
+  .comparison-run+ .comparison-run { border-left: 1px solid var(--line); }
+  .comparison-run h4,.comparison-side h5 { margin: 0; font-size: 14px; }
+  .comparison-summary { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding: 18px 0; }
+  .comparison-filter { display: flex; align-items: center; gap: 8px; min-height: 44px; margin-bottom: 12px; cursor: pointer; }
+  .comparison-criterion { border-top: 1px solid var(--line); padding: 16px 0 0; }
+  .comparison-criterion>header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 0 12px; }
+  .comparison-criterion h4 { margin: 0; flex: 1 1 240px; font-size: 15px; overflow-wrap: anywhere; }
+  .comparison-side { padding: 14px 16px; min-width: 0; overflow-wrap: anywhere; }
+  .comparison-side+ .comparison-side { border-left: 1px solid var(--line); }
+  .comparison-side h5 { color: var(--muted); margin-bottom: 12px; }
+  .comparison-side p { line-height: 1.6; white-space: pre-wrap; }
+  .comparison-values { display: flex; flex-wrap: wrap; gap: 12px 28px; margin: 0 0 12px; }
+  .comparison-values dt { font-size: 12px; color: var(--muted); }
+  .comparison-values dd { margin: 4px 0 0; font-weight: 650; }
+  .comparison-evidence>summary { min-height: 44px; padding-block: 12px; cursor: pointer; font-size: 13px; font-weight: 600; }
+  .comparison-evidence blockquote { margin: 8px 0; padding: 8px 12px; border-left: 3px solid var(--line); }
+  .comparison-evidence blockquote strong { font-size: 12px; }
+  .comparison-evidence blockquote p { margin: 6px 0 0; }
 }
+/* Scoped typography follows the final visual layer. */
+.evaluation-comparison h3 { font-size: 18px; }
 @layer responsive {
   @media (max-width: 900px) { .history-row { grid-template-columns: minmax(0,1.2fr) minmax(0,1fr); } .history-row>.btn { justify-self: start; min-height: 44px; } }
   @media (max-width: 520px) { .history-body { padding: 0 12px 12px; } .evaluation-history>summary { padding-inline: 12px; } .history-row { gap: 14px 10px; } .history-badges .badge { font-size: 11px; } .history-row>.btn { width: 100%; } }
+  @media (max-width: 1100px) { .comparison-controls { grid-template-columns: repeat(2,minmax(0,1fr)); } .comparison-controls>.btn { justify-self: start; grid-column: 1/-1; } }
+  @media (max-width: 650px) {
+    .comparison-controls,.comparison-columns { grid-template-columns: minmax(0,1fr); }
+    .comparison-controls>.btn { justify-self: stretch; }
+    .comparison-run+ .comparison-run,.comparison-side+ .comparison-side { border-left: 0; border-top: 1px solid var(--line); }
+    .comparison-run,.comparison-side { padding-inline: 10px; }
+  }
 }

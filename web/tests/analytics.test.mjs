@@ -121,3 +121,35 @@ test('incomplete criterion sets never contribute to the complete-score average e
   assert.equal(result.scored, 1);
   assert.equal(result.average, 0);
 });
+
+test('server gross answers with applicable false count as complete and have their own denominator', async () => {
+  const evaluations = [ev('clear', full.map(item => item.criterion_id === 'g' ? {...item, applicable: false, effective_weight: null} : item), {total: 100, complete: true}),
+    ev('gross', full.map(item => item.criterion_id === 'g' ? {...item, answer: 'yes', applicable: false, effective_weight: null} : {...item, points: 0, answer: item.criterion_id === 's' ? 0 : 'no'}), {total: 0, complete: true, gross_error: true}),
+    ev('review', full.map(item => item.criterion_id === 'g' ? {...item, applicable: false, needs_review: true} : item), {total: 100, complete: false})];
+  const data = await loadAnalytics(evaluations.map(item => row(item.conversation_id)), id => evaluations.find(item => item.id === id));
+  const summary = summarizeAnalytics(data, data.groups[0].key);
+  assert.equal(summary.scored, 2); assert.equal(summary.average, 50); assert.equal(summary.gross, 1);
+  const gross = summary.criteria.find(item => item.id === 'g');
+  assert.equal(gross.valid, 2); assert.equal(gross.grossCount, 1); assert.equal(gross.lossRate, .5); assert.equal(gross.unknown, 1);
+  assert.deepEqual(gross.dialogIds, ['gross']);
+});
+
+test('invalid gross answers and non-gross applicable false remain incomplete', async () => {
+  const evaluations = [ev('invalid-gross', full.map(item => item.criterion_id === 'g' ? {...item, answer: 'na', applicable: false} : item), {complete: true}),
+    ev('invalid-normal', full.map(item => item.criterion_id === 'a' ? {...item, applicable: false} : item), {complete: true})];
+  const data = await loadAnalytics(evaluations.map(item => row(item.conversation_id)), id => evaluations.find(item => item.id === id));
+  const summary = summarizeAnalytics(data, data.groups[0].key);
+  assert.equal(summary.scored, 0); assert.equal(summary.average, null);
+  assert.equal(summary.criteria.find(item => item.id === 'g').unknown, 1);
+  assert.equal(summary.criteria.find(item => item.id === 'a').unknown, 1);
+});
+
+test('equivalent saved checklist objects with reordered keys remain in the same analytics group', async () => {
+  const before = ev('1', full), after = ev('2', full);
+  before.checklist.sections = [{id: 's', name: 'Вымышленная секция'}];
+  after.checklist.sections = [{name: 'Вымышленная секция', id: 's'}];
+  before.checklist.criteria = config.map(item => item.id === 's' ? {...item, scale: {...item.scale, steps: item.scale.steps.map(step => ({value: step.value, label: 'Synthetic step'}))}} : item);
+  after.checklist.criteria = config.map(item => item.id === 's' ? {...item, scale: {...item.scale, steps: item.scale.steps.map(step => ({label: 'Synthetic step', value: step.value}))}} : item);
+  const data = await loadAnalytics([row('1'), row('2')], id => id === before.id ? before : after);
+  assert.equal(data.failures.conflict, 0); assert.equal(data.records.length, 2); assert.equal(data.groups.length, 1);
+});

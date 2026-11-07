@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import type { Api, EvaluationSummary } from './types';
+import type { Api, DialogRecord, EvaluationSummary } from './types';
 import { formatNumber, getLocale, translate as t } from './i18n';
+import { EvaluationComparison } from './comparison';
 
-interface Props {api:Api;conversationId:string;currentEvaluationId?:string;latestEvaluationId?:string|null;onOpen:(id:string)=>void;refreshKey?:number}
+interface Props {api:Api;conversationId:string;record?:DialogRecord;currentEvaluationId?:string;latestEvaluationId?:string|null;onOpen:(id:string)=>void;refreshKey?:number}
 interface HistoryState {api:Api;conversationId:string;loading:boolean;rows:EvaluationSummary[];error:boolean}
 
 function historyDate(value:string|null|undefined) {
@@ -13,7 +14,7 @@ function historyDate(value:string|null|undefined) {
   return {iso:date.toISOString(),text:new Intl.DateTimeFormat({ru:'ru-RU',en:'en-GB',kk:'kk-KZ'}[getLocale()],{timeZone:'Asia/Almaty',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}).format(date)};
 }
 
-export function EvaluationHistory({api,conversationId,currentEvaluationId,latestEvaluationId,onOpen,refreshKey}:Props) {
+export function EvaluationHistory({api,conversationId,record,currentEvaluationId,latestEvaluationId,onOpen,refreshKey}:Props) {
   const [state,setState]=useState<HistoryState|null>(null),[retry,setRetry]=useState(0);
   useEffect(()=>{
     let active=true;
@@ -44,6 +45,7 @@ export function EvaluationHistory({api,conversationId,currentEvaluationId,latest
           <button type="button" className="btn btn-small" disabled={!done || selected} aria-label={t('Открыть оценку {id}',{id:row.id})} onClick={()=>onOpen(row.id)}>{t('Открыть оценку')}</button>
         </li>;
       })}</ol>}
+      {current && !current.loading && !current.error && current.rows.length>0 && <EvaluationComparison api={api} conversationId={conversationId} record={record} rows={current.rows} onOpen={onOpen} refreshKey={refreshKey} formatDate={historyDate}/>}
     </div>
   </details>;
 }

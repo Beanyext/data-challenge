@@ -1,5 +1,7 @@
 /** Read-only aggregation of the latest saved evaluation per conversation. No dialog text is copied. */
 const finite = value => typeof value === 'number' && Number.isFinite(value);
+const snapshotSignature = value => JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item)
+  ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
 const excludedStatuses = new Set(['new', 'pending', 'queued', 'running', 'error', 'failed']);
 export const analyticsLanguage = value => {
   const language = String(value || '').toUpperCase();
@@ -55,7 +57,7 @@ export async function loadAnalytics(rows, getEvaluation, { concurrency = 4 } = {
         if (matches.length !== 1 || matches[0].needs_review) return false;
         const item = matches[0];
         return item.answer === 'na' ? criterion.na_allowed && !criterion.gross_error
-          : item.applicable !== false && validAnswer(item.answer, criterion);
+          : (criterion.gross_error || item.applicable !== false) && validAnswer(item.answer, criterion);
       });
       loaded[index] = { ...candidate, checklist, key: analyticsGroupKey(checklist.id, checklist.version), criteria,
         total: finite(evaluation.total) ? evaluation.total : null, complete,
@@ -66,7 +68,7 @@ export async function loadAnalytics(rows, getEvaluation, { concurrency = 4 } = {
   const signatures = new Map();
   const conflicts = new Set();
   for (const record of loaded.filter(Boolean)) {
-    const signature = JSON.stringify(record.checklist);
+    const signature = snapshotSignature(record.checklist);
     if (signatures.has(record.key) && signatures.get(record.key) !== signature) conflicts.add(record.key);
     else signatures.set(record.key, signature);
   }
@@ -99,7 +101,7 @@ export function summarizeAnalytics(data, key, language = '') {
       const item = matches.length === 1 ? matches[0] : null;
       if (!item || item.needs_review || item.answer == null) { result.unknown++; continue; }
       if (item.answer === 'na' && criterion.na_allowed && !criterion.gross_error) { result.na++; continue; }
-      if (item.applicable === false || !validAnswer(item.answer, criterion)) { result.unknown++; continue; }
+      if (!validAnswer(item.answer, criterion) || !criterion.gross_error && item.applicable === false) { result.unknown++; continue; }
       if (criterion.gross_error) {
         result.valid++;
         if (item.answer === 'yes') { result.grossCount++; result.dialogIds.push(record.conversationId); }

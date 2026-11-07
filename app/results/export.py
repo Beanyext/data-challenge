@@ -24,6 +24,12 @@ def criterion_code(criterion: dict) -> str:
     return criterion.get("code") or criterion["id"]
 
 
+def is_mock_model(name: object) -> bool:
+    """Явные названия учебных моделей, без совпадений внутри настоящего имени."""
+    return isinstance(name, str) and any(re.match(r"^(?:mock|demo)(?:$|[-:\s])", part.strip(), re.IGNORECASE)
+                                         for part in name.split(","))
+
+
 def to_value(answer):
     if answer == NA:
         return None
@@ -87,14 +93,21 @@ def rationale(explanation: str, criterion: dict, answer, grams: set) -> tuple[st
 
 def evidence_turns(item: dict, n_turns: int) -> list[int]:
     """Номера реплик с 1, как требуют организаторы. У нас turn считается с 0."""
-    turns = sorted({e["turn"] + 1 for e in item.get("evidence") or [] if isinstance(e.get("turn"), int) and 0 <= e["turn"] < n_turns})
+    evidence = item.get("evidence", [])
+    if not isinstance(evidence, list) or any(not isinstance(e, dict) or not isinstance(e.get("turn"), int)
+                                           or isinstance(e["turn"], bool) or not 0 <= e["turn"] < n_turns for e in evidence):
+        raise ValueError(f"evidence.turn должен быть целым индексом от 0 до {n_turns - 1}")
+    turns = sorted({e["turn"] + 1 for e in evidence})
+    rng = item.get("checked_range")
+    if rng is not None:
+        if (not isinstance(rng, dict) or any(not isinstance(rng.get(k), int) or isinstance(rng[k], bool) for k in ("from", "to"))
+                or not 0 <= rng["from"] <= rng["to"] < n_turns):
+            raise ValueError(f"checked_range должен задавать целые индексы от 0 до {n_turns - 1}")
+        if not turns:
+            lo, hi = rng["from"], rng["to"]
+            return list(range(lo + 1, hi + 2)) if hi - lo < 5 else [lo + 1, hi + 1]
     if turns:
         return turns
-    rng = item.get("checked_range")
-    if isinstance(rng, dict) and isinstance(rng.get("from"), int) and isinstance(rng.get("to"), int):
-        lo, hi = max(0, rng["from"]), min(n_turns - 1, rng["to"])
-        if lo <= hi:
-            return list(range(lo + 1, hi + 2)) if hi - lo < 5 else [lo + 1, hi + 1]
     return []
 
 
@@ -132,6 +145,10 @@ def build_entry(record: dict, evaluation: dict | None, checklist: dict) -> tuple
     notes, criteria = [], []
     for c in checklist["criteria"]:
         item = by_id[c["id"]]
+        try:
+            turns = evidence_turns(item, len(transcript))
+        except ValueError as e:
+            return _error(cid, f"Некорректные доказательства по критерию {c['id']}: {e}."), []
         text, replaced = rationale(item.get("explanation", ""), c, answers[c["id"]], grams)
         if replaced:
             notes.append(f"{cid} {c['id']}: объяснение заменено шаблоном (цитата или пусто)")
@@ -140,7 +157,7 @@ def build_entry(record: dict, evaluation: dict | None, checklist: dict) -> tuple
                 "criterion_id": criterion_code(c),
                 "value": to_value(answers[c["id"]]),
                 "rationale": text,
-                "evidence_turns": evidence_turns(item, len(transcript)),
+                "evidence_turns": turns,
             }
         )
     entry = {
@@ -180,7 +197,9 @@ def build_results(records: list[dict], evaluations: dict[str, dict], checklist: 
     if mode not in MODES:
         raise ValueError(f"mode должен быть одним из {MODES}")
     used = [evaluations.get(r["conversation_id"]) for r in records]
-    if not allow_mock and any(ev and ev.get("provider") == "mock" for ev in used):
+    if not allow_mock and any(ev and (ev.get("provider") in ("mock", "demo") or ev.get("demo") is True
+                                     or is_mock_model(ev.get("model"))
+                                     or any(is_mock_model(c.get("model")) for c in ev.get("calls") or [])) for ev in used):
         raise ValueError("среди оценок есть тестовый режим без модели: такие результаты сдавать нельзя")
     results, notes = [], []
     for record, ev in zip(records, used):
@@ -188,7 +207,7 @@ def build_results(records: list[dict], evaluations: dict[str, dict], checklist: 
         results.append(entry)
         notes += n
     models = sorted({c.get("model") for ev in used if ev and not ev.get("error") for c in ev.get("calls") or [] if c.get("model")})
-    name = ", ".join(models) or os.environ.get("CQA_MODEL", "claude-opus-5-5")
+    name = ", ".join(models) or ("mock" if allow_mock else os.environ.get("CQA_MODEL", "claude-opus-5-5"))
     doc = {"schema_version": SCHEMA_VERSION, "team_name": team_name.strip(), "model": {"mode": mode, "name": name}, "results": results}
     report = {
         "records": len(results),

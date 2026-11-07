@@ -22,13 +22,16 @@ def _checklist(path: str) -> dict:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def _print_check(errors: list[str], path: Path) -> int:
+def _print_check(errors: list[str], path: Path, allow_mock: bool = False) -> int:
     if errors:
         print(f"ПРОВЕРКА НЕ ПРОЙДЕНА: {path}, ошибок {len(errors)}")
         for e in errors[:40]:
             print(f"  - {e}")
         return 1
-    print(f"Проверка пройдена: {path}")
+    if allow_mock:
+        print(f"УЧЕБНАЯ ПРОВЕРКА пройдена: {path}. Результаты не предназначены для сдачи.")
+    else:
+        print(f"Проверка пройдена: {path}")
     return 0
 
 
@@ -38,7 +41,7 @@ def cmd_build(args) -> int:
     evaluations = load_evaluations(args.evals, checklist)
     doc, report = build_results(records, evaluations, checklist, args.team or os.environ.get("CQA_TEAM_NAME", ""),
                                 args.mode, allow_mock=args.allow_mock)
-    errors = check_results(doc, records, checklist, args.expect)
+    errors = check_results(doc, records, checklist, args.expect, allow_mock=args.allow_mock)
     out = Path(args.out)
     if errors and not args.force:
         _print_check(errors, out)
@@ -48,7 +51,7 @@ def cmd_build(args) -> int:
     print(json.dumps({k: v for k, v in report.items() if k != "rationale_replaced"}, ensure_ascii=False))
     if report["rationale_replaced"]:
         print(f"Объяснений заменено шаблоном: {len(report['rationale_replaced'])}")
-    return _print_check(check_results(load_results_file(out), records, checklist, args.expect), out)
+    return _print_check(check_results(load_results_file(out), records, checklist, args.expect, allow_mock=args.allow_mock), out, args.allow_mock)
 
 
 def cmd_check(args) -> int:
@@ -60,7 +63,7 @@ def cmd_check(args) -> int:
     except (ValueError, UnicodeDecodeError) as e:
         print(f"ПРОВЕРКА НЕ ПРОЙДЕНА: {path}: {e}")
         return 1
-    return _print_check(check_results(doc, records, checklist, args.expect), path)
+    return _print_check(check_results(doc, records, checklist, args.expect, allow_mock=args.allow_mock), path, args.allow_mock)
 
 
 def cmd_control(args) -> int:
@@ -99,7 +102,7 @@ def cmd_control(args) -> int:
     code = cmd_build(build_args)
     minutes = (datetime.now() - started).total_seconds() / 60
     print(f"Заняло {minutes:.1f} мин.")
-    if code == 0:
+    if code == 0 and args.provider != "mock":
         print(f"Дальше: git add {args.out} && git commit -m \"Результаты {args.group_id}\" && git push")
     return code
 
@@ -119,13 +122,14 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--mode", default="external_api")
     b.add_argument("--expect", type=int, help="сколько записей должно быть")
     b.add_argument("--force", action="store_true", help="записать даже с ошибками проверки (черновик)")
-    b.add_argument("--allow-mock", action="store_true", help=argparse.SUPPRESS)
+    b.add_argument("--allow-mock", action="store_true", help="учебная сборка; результат не предназначен для сдачи")
     b.set_defaults(func=cmd_build)
 
     c = sub.add_parser("check", parents=[common], help="проверить готовый файл")
     c.add_argument("path")
     c.add_argument("--data", required=True)
     c.add_argument("--expect", type=int)
+    c.add_argument("--allow-mock", action="store_true", help="учебная проверка; результат не предназначен для сдачи")
     c.set_defaults(func=cmd_check)
 
     k = sub.add_parser("control", parents=[common], help="контрольный час: получить набор по group_id, оценить, собрать, проверить")
