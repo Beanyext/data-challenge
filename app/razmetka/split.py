@@ -8,9 +8,10 @@ from __future__ import annotations
 import random
 
 # (канал, язык): (отложенных, настроечных). Всего 30: 5 звонков, 13 чатов RU, 6 KZ, 6 EN.
+# Отложенные только чаты: в контрольном наборе организаторов звонков нет (ответ Freedom Broker 07.11).
 DEFAULT_QUOTAS = {
-    ("voice call", "RU"): (2, 3),
-    ("agent chat", "RU"): (4, 9),
+    ("voice call", "RU"): (0, 5),
+    ("agent chat", "RU"): (6, 7),
     ("agent chat", "KZ"): (2, 4),
     ("agent chat", "EN"): (2, 4),
 }
