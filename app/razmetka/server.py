@@ -125,16 +125,28 @@ def make_handler(app: Labeling):
                 return self._json(200, app.state())
             return self._json(404, {"error": "нет такой страницы"})
 
+        def _read_body(self) -> bytes | None:
+            """Тело читается до любого ответа: если ответить, не дочитав его, Windows может
+            оборвать соединение, и клиент вместо ответа получит ошибку сети."""
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = -1
+            if length < 0 or length > MAX_BODY:
+                self.close_connection = True
+                return None
+            return self.rfile.read(length) if length else b""
+
         def do_POST(self):
+            raw = self._read_body()
             if not self._trusted():
                 return self._json(403, {"error": "запрос не с этого компьютера"})
+            if raw is None:
+                return self._json(413, {"error": "слишком большой запрос"})
             if not self.headers.get("Content-Type", "").startswith("application/json"):
                 return self._json(415, {"error": "нужен application/json"})
-            length = int(self.headers.get("Content-Length") or 0)
-            if length > MAX_BODY:
-                return self._json(413, {"error": "слишком большой запрос"})
             try:
-                body = json.loads(self.rfile.read(length) or b"{}")
+                body = json.loads(raw or b"{}")
             except json.JSONDecodeError:
                 return self._json(400, {"error": "тело запроса не JSON"})
             path = urlsplit(self.path).path

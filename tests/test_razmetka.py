@@ -74,6 +74,7 @@ def test_clean_label_partial_and_ordered():
         {"answers": {"c04": 12}},
         {"answers": {}, "unsure": ["c99"]},
         {"answers": {}, "draft": "кто-то"},
+        {"answers": {}, "by": "робот"},
         {"answers": ["c01"]},
     ],
 )
