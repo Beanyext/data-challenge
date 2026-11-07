@@ -24,5 +24,6 @@ catboost_info/
 # Секреты
 .env
 .env.*
+!.env.example
 *.pem
 *.key
