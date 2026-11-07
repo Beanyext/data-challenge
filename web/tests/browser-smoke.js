@@ -46,6 +46,7 @@ async (originalPage) => {
     await page.locator('[data-criterion="answer_type"]').selectOption('scale');
     await page.locator('[data-criterion="steps"]').fill('0 | Не выполнено\n10 | Выполнено');
     await page.getByRole('button', { name: 'Сохранить версию ↗', exact: true }).click();
+    await page.getByRole('button', { name: 'Сохранить новую версию', exact: true }).click();
     await page.getByText('Сохранено', { exact: true }).waitFor();
     check((await page.locator('#choose-checklist').innerText()).includes('v2'), 'New checklist version');
     await page.getByRole('link', { name: /Диалоги/ }).click();

@@ -7,8 +7,9 @@ async (originalPage) => {
   const clone = value => JSON.parse(JSON.stringify(value));
   const results = [];
   const counts = { evaluationPosts: 0, jobPolls: 0, checklistPosts: 0, appealPosts: 0, decisionPosts: 0, blockedExternal: 0 };
-  let listMode = 'normal', jobStatus = 'running', releaseEvaluation, firstPostSeen;
+  let listMode = 'normal', jobStatus = 'running', releaseEvaluation, firstPostSeen, releaseChecklist, checklistSeen;
   const firstPost = new Promise(resolve => { firstPostSeen = resolve; });
+  const checklistPost = new Promise(resolve => { checklistSeen = resolve; });
   const checklist = {
     id: 'api-original', version: 1, name: 'API: исходный чек-лист', rounding: { digits: 2 }, guidance: [],
     sections: [{ id: 's1', name: 'Контакт' }],
@@ -56,6 +57,7 @@ async (originalPage) => {
     if (path === '/checklists' && method === 'POST') {
       counts.checklistPosts++;
       const payload = request.postDataJSON();
+      if(counts.checklistPosts===1){const gate=new Promise(resolve=>{releaseChecklist=resolve;});checklistSeen();await gate;}
       const saved = { ...payload, id: 'api-server-assigned-id', version: 1 };
       checklists.push(saved);
       return json(route, saved);
@@ -102,7 +104,7 @@ async (originalPage) => {
     await page.goto('http://127.0.0.1:8765/');
     await page.getByRole('heading', { name: 'Диалоги', exact: true }).waitFor();
     check(!await page.locator('#demo-banner').isVisible(), 'API mode must not show demo banner');
-    check((await page.locator('#mode-label').innerText()) === 'API команды', 'Explicit API mode');
+    check((await page.locator('#mode-label').innerText()) === 'Данные сервера', 'Explicit API mode');
 
     await page.getByRole('link', { name: 'Чек-листы', exact: true }).click();
     await page.getByRole('button', { name: 'Новый чек-лист', exact: true }).click();
@@ -111,6 +113,12 @@ async (originalPage) => {
     await page.locator('[data-criterion=title]').fill('Критерий API');
     await page.locator('[data-criterion=description]').fill('Правило новой версии, сохранённое тестовым сервером.');
     await page.getByRole('button', { name: 'Сохранить версию ↗', exact: true }).click();
+    await page.getByRole('button', { name: 'Сохранить новую версию', exact: true }).click();
+    await checklistPost;
+    check(await page.getByRole('button',{name:'Закрыть окно',exact:true}).isDisabled(),'Slow save prevents closing and losing newer draft');
+    await page.keyboard.press('Escape');
+    check(await page.locator('#modal').isVisible(),'Escape cannot close an outstanding checklist save');
+    releaseChecklist();
     await page.getByText('Сохранено', { exact: true }).waitFor();
     check(counts.checklistPosts === 1, 'Checklist saved exactly once');
     check((await page.locator('#choose-checklist').inputValue()) === 'api-server-assigned-id@1', 'Server-assigned checklist remains selected after save');
@@ -190,6 +198,24 @@ async (originalPage) => {
     check(!await page.locator('#demo-banner').isVisible(), 'Malformed API data must not enable demo');
     results.push('HTTP 503 and malformed API response show errors, retry works, no silent demo fallback');
 
+    listMode='normal';
+    checklists[0].version=2;
+    checklists[0].criteria[0].title='Название только новой версии';
+    evaluations[0].checklist={...clone(checklists[0]),version:999};
+    await page.getByRole('link',{name:/Диалоги/}).click();
+    await page.getByRole('button',{name:'Открыть api-qa-001',exact:true}).click();
+    await page.getByText('Исходная версия чек-листа недоступна. Правила другой версии не подставляются. Для пересмотра нужен исходный чек-лист.',{exact:true}).waitFor();
+    check((await page.locator('#criterion-c01 h3').innerText())==='c01','Missing snapshot never uses a newer criterion title');
+    await page.locator('#criterion-c01 [data-appeal]').click();
+    await page.getByRole('textbox',{name:'Почему вы не согласны'}).fill('Проверка отсутствующей исходной версии.');
+    await page.getByRole('button',{name:'Подать апелляцию',exact:true}).click();
+    await page.locator('#criterion-c01').getByRole('button',{name:'Апелляция подана'}).waitFor();
+    await page.getByRole('link',{name:/Апелляции/}).click();
+    await page.getByRole('button',{name:'Рассмотреть',exact:true}).click();
+    await page.getByText('Не удалось получить исходный критерий этой оценки. Решение не сохранено.',{exact:true}).waitFor();
+    check(await page.locator('[data-decision]').count()===0,'Cannot decide using a mismatched checklist snapshot');
+    results.push('slow save guarded; missing historical snapshot warns and blocks unsafe review');
+
     check(counts.blockedExternal === 0, 'Unexpected external resource requested');
     check(pageErrors.length === 0, JSON.stringify(pageErrors));
     return { passed: results, counts, pageErrors, realApiCalls: 0, paidCalls: 0 };
@@ -198,6 +224,7 @@ async (originalPage) => {
     throw new Error(`${error.message}\nPassed: ${results.join('; ')}\nCounts: ${JSON.stringify(counts)}\nScreenshot: /private/tmp/cqa-browser-api-failure.png`);
   } finally {
     releaseEvaluation?.();
+    releaseChecklist?.();
     await context.close();
   }
 }
