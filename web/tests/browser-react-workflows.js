@@ -3,6 +3,7 @@ async (originalPage) => {
   const page=await context.newPage(),errors=[],passed=[],widths=[];
   page.on('pageerror',error=>errors.push(error.message));
   const check=(condition,message)=>{if(!condition)throw new Error(message);};
+  const expandCriterion=async id=>{const row=page.locator(`#criterion-${id} .result-row`);await row.waitFor();if(await row.getAttribute('aria-expanded')==='false')await row.click();await page.locator(`#criterion-${id} .result-criterion-details`).waitFor();};
   const locale=async value=>{await page.locator('.language-trigger').click();await page.locator(`[data-language=${value}]`).click();await page.waitForFunction(language=>document.documentElement.lang===language,value);};
   const top=()=>page.evaluate(()=>{document.activeElement?.blur();window.scrollTo({top:0});});
   const capture=async(name,fullPage=true)=>{await top();await page.screenshot({path:`/private/tmp/cqa-unified-${name}.png`,fullPage});};
@@ -34,7 +35,9 @@ async (originalPage) => {
     await page.locator('[data-nav=dialogs]').click();await page.locator('#dialog-rows tr').first().waitFor();
     await page.locator('[data-filter=language]').selectOption('');await page.locator('#select-all').check();await page.locator('#select-all').uncheck();
     await page.locator('[data-open="demo-ru-001"]').first().click();await page.locator('#evaluation-panel').waitFor();
-    await page.locator('.evidence-link').first().click();
+    const evidenceCard=page.locator('.result-criterion').filter({has:page.locator('.evidence-link')}).first();
+    await evidenceCard.locator('.result-row').click();
+    await evidenceCard.locator('.evidence-link').first().click();
     check(await page.locator('.turn.highlight').count()>0 && await page.locator('.result-criterion.evidence-selected').count()===1,'Criterion and source proof are not linked');
     await page.locator('[data-back-to-map]').click();
     check(await page.locator('.turn.highlight').count()===0 && await page.locator('.result-criterion.evidence-selected').count()===0,'Criteria map left stale proof highlights');
@@ -43,7 +46,7 @@ async (originalPage) => {
     await capture('detail-desktop');await capture('detail-viewport',false);await checkWidths('detail');
     await page.setViewportSize({width:390,height:844});await capture('detail-mobile');await page.setViewportSize({width:1440,height:1000});
     passed.push('Latest focus workspace, linked proof and keyboard-addressable criteria map');
-    await page.locator('#criterion-c07 [data-appeal]').click();await page.locator('#appeal-form textarea').fill('Вымышленная апелляция для визуальной проверки.');await page.locator('#appeal-form button[type=submit]').click();await page.locator('#criterion-c07 [data-appeal][disabled]').waitFor();
+    await expandCriterion('c07');await page.locator('#criterion-c07 [data-appeal]').click();await page.locator('#appeal-form textarea').fill('Вымышленная апелляция для визуальной проверки.');await page.locator('#appeal-form button[type=submit]').click();await page.locator('#appeal-form').waitFor({state:'detached'});await page.locator('#criterion-c07 [data-appeal][disabled]').waitFor({state:'attached'});await expandCriterion('c07');await page.locator('#criterion-c07 [data-appeal][disabled]').waitFor();
     await page.locator('[data-nav=appeals]').click();await page.locator('[data-review]').click();await page.locator('form[data-decision] textarea').waitFor();
     const reason='Черновик решения «сохранить» & проверить контекст.';await page.locator('form[data-decision] textarea').fill(reason);await locale('en');
     check(await page.locator('form[data-decision] textarea').inputValue()===reason,'Live locale switch lost review reason');

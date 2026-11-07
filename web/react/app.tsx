@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { createApi } from '../api.mjs';
 import { evaluationChecklist } from '../dialog-utils.mjs';
-import { DialogsWorkspace, DialogWorkspace } from './pages';
+import { DialogsWorkspace, DialogWorkspace, EstimateNote } from './pages';
 import { ChecklistWorkspace } from './forms';
 import { AppealsWorkspace } from './review';
 import { SubmissionWorkspace } from './submission';
@@ -12,7 +12,7 @@ import { EmptyState, Icon, Modal } from './shared';
 import { MotionFrame, installInteractionMotion } from './motion';
 import { getLocale, localizeMessage, persistLocale, translate as t, type Locale } from './i18n';
 import { errorText, navigate } from './runtime';
-import type { Api, Appeal, Checklist, DialogRecord, Evaluation, ListState, Notify } from './types';
+import type { Api, Appeal, Checklist, DialogRecord, Evaluation, ListState, Notify, Health } from './types';
 
 type Connection = { baseUrl:string; demo:boolean };
 type Route = { page:string; id:string };
@@ -117,7 +117,11 @@ export function App() {
           const job=await api.getJob(jobId);if(ignored)return;failures=0;
           setJobProgress({completed:Number(job.completed) || 0,total:Number(job.total) || 1});
           if(['completed','done','finished','succeeded'].includes(job.status)) {
-            rememberJob(null,connection);setJobId(null);setJobProgress(null);setListState(previous=>({...previous,selected:new Set()}));refresh();notify('Оценка завершена. Результаты обновлены.');return;
+            rememberJob(null,connection);setJobId(null);setListState(previous=>({...previous,selected:new Set()}));refresh();
+            if(Number(job.failed)>0 || job.errors?.length) {
+              setJobProgress({completed:Number(job.completed) || 0,total:Number(job.total) || 1,error:'Часть диалогов не оценена. Обновите диалоги и повторите оценку записей с ошибкой.'});
+            } else {setJobProgress(null);notify('Оценка завершена. Результаты обновлены.');}
+            return;
           }
           if(['failed','error','cancelled','canceled'].includes(job.status)) {
             rememberJob(null,connection);setJobId(null);setJobProgress({completed:Number(job.completed) || 0,total:Number(job.total) || 1,error:'Оценка завершилась с ошибкой. Обновите диалоги и проверьте сервер.'});refresh();return;
@@ -211,18 +215,20 @@ export function App() {
       <SubmissionWorkspace active={route.page==='submission'} api={api} demo={connection.demo} teamName={window.CQA_CONFIG?.teamName || 'seeusoon'} notify={notify} connectionError={service.error} onSettings={openSettings}/>
     </main></div>
     <div id="notifications" className="notifications" aria-live="polite" aria-atomic="true">{toast && <MotionFrame kind="toast" key={toast.revision}><div className={`toast ${toast.error?'error':''}`}><span className="toast-symbol" aria-hidden="true"><Icon name={toast.error?'alert':'circleCheck'}/></span><span>{localizeMessage(toast.text)}</span><button type="button" className="icon-btn toast-dismiss" aria-label={t('Закрыть уведомление')} onClick={()=>setToast(null)}><Icon name="close"/></button></div></MotionFrame>}</div>
-    {modal && <ApplicationModal key={modal.kind} modal={modal} connection={connection} checklists={data.checklists} onClose={()=>setModal(null)} onSubmit={submitModal} notify={notify}/>}
+    {modal && <ApplicationModal key={modal.kind} modal={modal} api={api} connection={connection} checklists={data.checklists} onClose={()=>setModal(null)} onSubmit={submitModal} notify={notify}/>}
     <input type="file" id="upload-file" accept=".json,application/json" hidden onChange={event=>{const file=event.currentTarget.files?.[0];if(file)void upload(file);event.currentTarget.value='';}}/>
   </>;
 }
 
-function ApplicationModal({modal,connection,checklists,onClose,onSubmit,notify}:{modal:ModalState;connection:Connection;checklists:Checklist[];onClose:()=>void;onSubmit:(values:FormData)=>Promise<boolean>;notify:Notify}) {
+function ApplicationModal({modal,api,connection,checklists,onClose,onSubmit,notify}:{modal:ModalState;api:Api;connection:Connection;checklists:Checklist[];onClose:()=>void;onSubmit:(values:FormData)=>Promise<boolean>;notify:Notify}) {
   const [sending,setSending]=useState(false),lock=useRef(false);
+  const [health,setHealth]=useState<Health|null>(null);
+  useEffect(()=>{if(modal.kind!=='evaluate' || !api.getHealth)return;let ignored=false;api.getHealth().then(value=>{if(!ignored)setHealth(value);}).catch(()=>{});return ()=>{ignored=true;};},[api,modal.kind]);
   const submit=async(event:FormEvent<HTMLFormElement>)=>{event.preventDefault();if(lock.current){notify(modal.kind==='evaluate'?'Предыдущее задание ещё выполняется.':'Дождитесь завершения сохранения.');return;}lock.current=true;setSending(true);const success=await onSubmit(new FormData(event.currentTarget));if(!success){lock.current=false;setSending(false);}};
   const title=t(modal.kind==='settings'?'Подключение к данным':modal.kind==='import'?'Импорт набора':modal.kind==='evaluate'?'Запустить оценку':'Оспорить оценку');
   const id=modal.kind==='settings'?'settings-form':modal.kind==='import'?'import-form':modal.kind==='evaluate'?'evaluate-form':'appeal-form';
   return <Modal title={title} onClose={onClose} busy={sending}><form id={id} className="form-stack" onSubmit={submit} data-criterion-id={modal.kind==='appeal'?modal.criterionId:undefined}><fieldset disabled={sending} className="modal-fields">
-    {modal.kind==='settings'?<><p className="modal-description">{t('Укажите адрес сервера вашей команды. Ключи AI и ссылка организаторов остаются на сервере.')}</p><fieldset><legend>{t('Источник данных')}</legend><div className="form-stack"><label><input type="radio" name="mode" value="api" defaultChecked={!connection.demo}/>{t('Сервер команды')}</label><label><input type="radio" name="mode" value="demo" defaultChecked={connection.demo}/>{t('Учебный пример без AI')}</label></div></fieldset><label>{t('Базовый адрес API')}<input name="baseUrl" defaultValue={connection.baseUrl} required placeholder="http://127.0.0.1:8000/api"/></label><p className="muted small">{t('Для сервера на том же адресе используйте /api. Учебные изменения сохраняются только в этом браузере.')}</p></>:modal.kind==='import'?<><p className="modal-description">{t('Сервер получит диалоги по group_id. Для контрольного набора введите значение от организаторов.')}</p><label>{t('Группа набора')}<input name="groupId" required maxLength={100} defaultValue="DEV" autoComplete="off"/></label>{connection.demo && <div className="notice">{t('Учебный режим не загружает набор организаторов. Для импорта подключите сервер команды.')}</div>}</>:modal.kind==='evaluate'?<><p className="modal-description">{t('Диалогов: {count}. Оценка пройдёт в фоне.',{count:modal.ids.length})}</p><label>{t('Чек-лист')}<select name="checklistId" defaultValue={modal.checklistId || checklists[0]?.id}>{checklists.map(checklist=><option key={`${checklist.id}@${checklist.version}`} value={checklist.id}>{checklist.name} · v{checklist.version}</option>)}</select></label><label><input name="confirm" type="checkbox" required/>{t(connection.demo?'Понимаю, что это учебная оценка без AI':'Подтверждаю запуск AI-оценки. Если сервер использует платный API, возможны расходы')}</label></>:<><p className="modal-description">{modal.title}. {t('Проверяющий увидит комментарий вместе с оценкой и фрагментом диалога.')}</p><label>{t('Почему вы не согласны')}<textarea name="comment" required maxLength={4000} rows={4} placeholder={t('Укажите, какой фрагмент стоит проверить')}/></label></>}
+    {modal.kind==='settings'?<><p className="modal-description">{t('Укажите адрес сервера вашей команды. Ключи AI и ссылка организаторов остаются на сервере.')}</p><fieldset><legend>{t('Источник данных')}</legend><div className="form-stack"><label><input type="radio" name="mode" value="api" defaultChecked={!connection.demo}/>{t('Сервер команды')}</label><label><input type="radio" name="mode" value="demo" defaultChecked={connection.demo}/>{t('Учебный пример без AI')}</label></div></fieldset><label>{t('Базовый адрес API')}<input name="baseUrl" defaultValue={connection.baseUrl} required placeholder="http://127.0.0.1:8000/api"/></label><p className="muted small">{t('Для сервера на том же адресе используйте /api. Учебные изменения сохраняются только в этом браузере.')}</p></>:modal.kind==='import'?<><p className="modal-description">{t('Сервер получит диалоги по group_id. Для контрольного набора введите значение от организаторов.')}</p><label>{t('Группа набора')}<input name="groupId" required maxLength={100} defaultValue="DEV" autoComplete="off"/></label>{connection.demo && <div className="notice">{t('Учебный режим не загружает набор организаторов. Для импорта подключите сервер команды.')}</div>}</>:modal.kind==='evaluate'?<><p className="modal-description">{t('Диалогов: {count}. Оценка пройдёт в фоне.',{count:modal.ids.length})}</p><EstimateNote health={health} count={modal.ids.length}/><label>{t('Чек-лист')}<select name="checklistId" defaultValue={modal.checklistId || checklists[0]?.id}>{checklists.map(checklist=><option key={`${checklist.id}@${checklist.version}`} value={checklist.id}>{checklist.name} · v{checklist.version}</option>)}</select></label><label><input name="confirm" type="checkbox" required/>{t(connection.demo?'Понимаю, что это учебная оценка без AI':'Подтверждаю запуск AI-оценки. Если сервер использует платный API, возможны расходы')}</label></>:<><p className="modal-description">{modal.title}. {t('Проверяющий увидит комментарий вместе с оценкой и фрагментом диалога.')}</p><label>{t('Почему вы не согласны')}<textarea name="comment" required maxLength={4000} rows={4} placeholder={t('Укажите, какой фрагмент стоит проверить')}/></label></>}
     <div className="form-actions"><button className="btn" type="button" data-action="close-modal" onClick={onClose}>{t('Отмена')}</button><button className="btn btn-primary" type="submit" aria-busy={sending}>{t(sending?'Сохранение…':modal.kind==='settings'?'Подключиться':modal.kind==='import'?'Импортировать набор':modal.kind==='evaluate'?(modal.ids.length===1?'Оценить диалог':'Оценить диалоги'):'Подать апелляцию')}</button></div>
   </fieldset></form></Modal>;
 }

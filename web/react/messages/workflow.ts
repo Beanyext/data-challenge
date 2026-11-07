@@ -1,4 +1,5 @@
 export const workflowMessages: Record<string,{en:string;kk:string}> = {
+  'Часть диалогов не оценена. Обновите диалоги и повторите оценку записей с ошибкой.': {en:'Some conversations could not be evaluated. Refresh the list and retry the failed conversations.',kk:'Кейбір диалогтар бағаланбады. Тізімді жаңартып, қатесі бар диалогтарды қайта бағалаңыз.'},
   'Проверяйте качество работы операторов и обоснования оценок.': {en:'Review operator quality and the evidence behind each assessment.',kk:'Операторлар жұмысының сапасын және бағалардың негіздемесін тексеріңіз.'},
   'Выгрузить для сдачи': {en:'Export submission',kk:'Тапсыру үшін экспорттау'},
   'Диалогов в выборке': {en:'Conversations in scope',kk:'Іріктемедегі диалогтар'},

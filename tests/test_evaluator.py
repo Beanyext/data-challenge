@@ -9,7 +9,7 @@ import pytest
 from app.evaluator.cli import main as cli_main
 from app.evaluator.dialog import display_times, load_records, render_transcript
 from app.evaluator.evaluate import evaluate_dialog
-from app.evaluator.prompt import answer_options, build_system_prompt, build_user_message, output_schema
+from app.evaluator.prompt import answer_options, answers_by_criterion, build_system_prompt, build_user_message, output_schema
 from app.evaluator.providers import MockProvider, call_cost
 from app.evaluator.validate import quote_found, validate
 
@@ -76,11 +76,41 @@ def test_replaced_criterion_needs_no_code_changes():
         "answer_type": "scale", "scale": {"min": 0, "max": 3}, "weight": 15, "na_allowed": False, "na_rule": None,
         "notes": None, "gross_error": False,
     })
-    schema = output_schema(checklist)
+    item = output_schema(checklist)["properties"]["criteria"]["items"]["properties"]
     system = build_system_prompt(checklist)
-    assert "c05" not in schema["properties"] and "Эмпатия" not in system
-    assert schema["properties"]["c09"]["properties"]["answer"]["enum"] == ["3", "2", "1", "0"]
-    assert "Проверка понимания" in system and "c09" in schema["required"]
+    assert "c05" not in item["id"]["enum"] and "Эмпатия" not in system
+    assert "c09" in item["id"]["enum"] and {"3", "2", "1", "0"} <= set(item["answer"]["enum"])
+    assert "Проверка понимания" in system and "c09)" in system
+
+
+def test_schema_size_does_not_grow_with_criteria():
+    """Отдельное свойство на критерий не компилировалось на API уже на 8 критериях."""
+    many = copy.deepcopy(CHECKLIST)
+    base = [c for c in many["criteria"] if not c["gross_error"]]
+    for k in range(30):
+        many["criteria"].append({**copy.deepcopy(base[k % len(base)]), "id": f"x{k:02d}"})
+    small, big = output_schema(CHECKLIST), output_schema(many)
+    assert small["properties"].keys() == big["properties"].keys() == {"criteria"}
+    item_small = small["properties"]["criteria"]["items"]
+    item_big = big["properties"]["criteria"]["items"]
+    assert item_small["properties"].keys() == item_big["properties"].keys()
+    assert item_small["properties"]["evidence"] == item_big["properties"]["evidence"]
+
+
+def test_answers_by_criterion():
+    raw = {"criteria": [{"id": "c01", "answer": "yes"}, {"id": "c01", "answer": "no"}, {"id": "c02", "answer": "na"}, "мусор"]}
+    assert answers_by_criterion(raw) == {"c01": {"id": "c01", "answer": "yes"}, "c02": {"id": "c02", "answer": "na"}}
+    assert answers_by_criterion({"c01": {"answer": "yes"}}) == {"c01": {"answer": "yes"}}
+    assert answers_by_criterion(None) == {} and answers_by_criterion({"criteria": "не список"}) == {"criteria": "не список"}
+
+
+def test_answer_from_union_enum_is_checked_per_criterion():
+    """В схеме один список ответов на все критерии, поэтому чужую ступень ловит проверка."""
+    raw = good_answer()
+    raw["c06"] = {**raw["c06"], "answer": "15"}
+    raw["c01"] = {**raw["c01"], "answer": "na"}
+    errors = validate(raw, CHAT, CHECKLIST)
+    assert "недопустимый ответ '15'" in errors["c06"][0] and "недопустимый ответ 'na'" in errors["c01"][0]
 
 
 def test_prompt_contains_rules_from_checklist():
@@ -212,7 +242,8 @@ def test_anthropic_request_shape(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "тестовый-ключ")
     for var in ("CQA_MODEL", "CQA_EFFORT", "CQA_FALLBACKS"):
         monkeypatch.delenv(var, raising=False)
-    _FakeAnthropic.reply = _fake_reply(json.dumps(good_answer(), ensure_ascii=False))
+    as_list = {"criteria": [{"id": cid, **item} for cid, item in good_answer().items()]}
+    _FakeAnthropic.reply = _fake_reply(json.dumps(as_list, ensure_ascii=False))
     provider = AnthropicProvider()
     result = evaluate_dialog(CHAT, CHECKLIST, provider)
 

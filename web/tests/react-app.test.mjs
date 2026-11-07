@@ -13,7 +13,7 @@ async function until(predicate,message) {
 test('the exact built React app boots once and preserves filters, selection, locale and modal input',async()=>{
   const failures=[],requests=[];
   const virtualConsole=new VirtualConsole();virtualConsole.on('jsdomError',error=>{if(!/Not implemented: navigation/.test(error.message))failures.push(error.message);});
-  const dom=new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>',{url:'http://127.0.0.1/?demo=1#dialogs',runScripts:'outside-only',pretendToBeVisual:true,virtualConsole});
+  const dom=new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>',{url:`http://127.0.0.1/?demo=1${process.env.CQA_TEST_LOCALE ? '&lang='+process.env.CQA_TEST_LOCALE : ''}#dialogs`,runScripts:'outside-only',pretendToBeVisual:true,virtualConsole});
   const {window}=dom,document=window.document;
   window.structuredClone=globalThis.structuredClone;
   window.TextDecoder=globalThis.TextDecoder;

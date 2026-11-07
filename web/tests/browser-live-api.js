@@ -3,6 +3,7 @@ async (originalPage) => {
   const page=await context.newPage(),errors=[],requests=[],blocked=[];
   const origin='http://127.0.0.1:8767',passed=[];
   const check=(condition,message)=>{if(!condition)throw new Error(message);};
+  const expandCriterion=async id=>{const row=page.locator(`#criterion-${id} .result-row`);await row.waitFor();if(await row.getAttribute('aria-expanded')==='false')await row.click();await page.locator(`#criterion-${id} .result-criterion-details`).waitFor();};
   page.on('pageerror',error=>errors.push(error.message));
   const healthResponse=await page.request.get(`${origin}/api/health`);
   const health=await healthResponse.json();
@@ -36,7 +37,7 @@ async (originalPage) => {
     await page.locator('[data-action=evaluate-dialog]').click();
     await page.locator('#evaluate-form input[name=confirm]').check();
     await page.locator('#evaluate-form').evaluate(form=>{form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));});
-    await page.locator('#evaluation-panel .result-score').waitFor();
+    await page.locator('#evaluation-panel .result-ring').waitFor();
     const list=await (await page.request.get(`${origin}/api/dialogs`)).json();
     const saved=list.find(row=>row.conversation_id===id);check(saved?.evaluation_id,'Actual server did not retain evaluation ID');
     const original=await (await page.request.get(`${origin}/api/evaluations/${encodeURIComponent(saved.evaluation_id)}`)).json();
@@ -48,10 +49,10 @@ async (originalPage) => {
     check(requests.filter(request=>request.method==='POST'&&request.path==='/api/evaluations').length===1,'Duplicate evaluation reached the actual backend');
     check(await page.locator('.criterion').count()===8,'Actual evaluation was not shown');
     passed.push('actual queued mock evaluation, scoring and duplicate-submit guard');
-    await page.locator('#criterion-c01 [data-appeal]').click();
+    await expandCriterion('c01');await page.locator('#criterion-c01 [data-appeal]').click();
     await page.locator('#appeal-form textarea').fill(`Вымышленная апелляция ${id} «проверка» & без персональных данных.`);
     await page.locator('#appeal-form button[type=submit]').click();
-    await page.locator('#criterion-c01 [data-appeal][disabled]').waitFor();
+    await page.locator('#appeal-form').waitFor({state:'detached'});await page.locator('#criterion-c01 [data-appeal][disabled]').waitFor({state:'attached'});await expandCriterion('c01');await page.locator('#criterion-c01 [data-appeal][disabled]').waitFor();
     await page.locator('[data-nav=appeals]').click();await page.locator('.appeal-card').filter({hasText:id}).locator('[data-review]').click();
     await page.locator('form[data-decision] textarea[name=reason]').waitFor();
     check(await page.locator('.review-transcript .turn').count()>0,'Review did not fetch the actual source conversation');
@@ -62,12 +63,12 @@ async (originalPage) => {
     await page.locator('form[data-decision] textarea[name=reason]').fill('Синтетическое решение для проверки сохранения и пересчёта.');
     await page.locator('form[data-decision] button[type=submit]').click();
     await page.getByRole('button',{name:/Все обращения/}).click();
-    await page.locator('.appeal-card').filter({hasText:id}).locator('[data-context]').first().click();await page.locator('#criterion-c01 .result-revision').waitFor();
+    await page.locator('.appeal-card').filter({hasText:id}).locator('[data-context]').first().click();await expandCriterion('c01');await page.locator('#criterion-c01 .result-revision').waitFor();
     const reviewed=await (await page.request.get(`${origin}/api/evaluations/${encodeURIComponent(saved.evaluation_id)}`)).json();
     check(reviewed.criteria.find(criterion=>criterion.criterion_id==='c01').answer===answer,'Decision was not read back from actual SQLite');
     check(reviewed.original_total===original.total,'Original score was overwritten');
     check(reviewed.total!==original.total,'Actual score did not change after a nonzero-weight binary decision');
-    await page.reload();await page.locator('#criterion-c01 .result-revision').waitFor();
+    await page.reload();await expandCriterion('c01');await page.locator('#criterion-c01 .result-revision').waitFor();
     passed.push('actual appeal, source context, decision, score recalculation and reload persistence');
     await page.getByRole('link',{name:'Отчёт',exact:true}).click();await page.getByRole('heading',{name:'Отчёт о качестве диалога',exact:true}).waitFor();
     check(await page.locator('.report-demo').count()>0,'Server mock data was mislabeled as a real AI report');
@@ -81,7 +82,7 @@ async (originalPage) => {
     await page.getByRole('button',{name:'Сохранить новую версию',exact:true}).click();await page.getByText('Сохранено',{exact:true}).waitFor();
     check((await page.locator('#choose-checklist').innerText()).includes(`v${original.checklist_version+1}`),'Actual server did not store the next checklist version');
     await page.goto(`${origin}/#dialog/${encodeURIComponent(id)}`);await page.locator('#criterion-c01').waitFor();
-    check((await page.locator('#criterion-c01 h3').innerText())!==changedTitle,'Historical evaluation was shown with the new checklist definition');
+    check((await page.locator('#criterion-c01 .result-row-title').innerText())!==changedTitle,'Historical evaluation was shown with the new checklist definition');
     passed.push('actual checklist version write and immutable historical evaluation');
     await page.locator('[data-nav=submission]').click();await page.getByRole('heading',{name:'Выгрузка результатов',exact:true}).waitFor();
     await page.locator('#submission-form select[name=dataset]').selectOption('prod');

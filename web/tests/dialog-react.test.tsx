@@ -177,7 +177,7 @@ test('partial results retain the server score and missing-answer labels without 
     const html=renderToStaticMarkup(<EvaluationView {...fixture} evaluation={partial}/>);
     assert.match(html,/Оценка неполная: есть критерии без ответа/);
     assert.match(html,/Предварительный балл/);
-    assert.match(html,/result-score">42,5/);
+    assert.match(html,/result-ring-number"[^>]*>42,5/);
     assert.match(html,/result-answer-review">Ответ не получен/);
     assert.doesNotMatch(html,/result-answer-na|Нет применимых критериев для расчёта/);
   }

@@ -1,32 +1,10 @@
-# Данные
-numpy
-pandas
-pyarrow
-duckdb
-openpyxl
-
-# Статистика и модели
-scipy
-scikit-learn
-statsmodels
-lightgbm
-catboost
-xgboost
-optuna
-shap
-
-# Графики и показ
-matplotlib
-seaborn
-plotly
-streamlit
-
-# Ноутбуки и проверка
-jupyterlab
-ipykernel
-nbconvert
-pytest
-tqdm
-
 # Вызов модели Claude для оценки диалогов
 anthropic
+
+# Сервер приложения для интерфейса
+fastapi
+python-multipart
+uvicorn
+
+# Тесты (fastapi.testclient работает через httpx, он приходит вместе с anthropic)
+pytest

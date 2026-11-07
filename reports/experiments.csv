@@ -1,1 +1,8 @@
 when,git,name,model,metric,mean,std,split,folds,rows,features,seconds
+2026-11-07T18:04:19,4701658,"base: opus-5-5 effort high, чек-лист v1",claude-opus-5-5,criterion_agreement,0.9583,,tune,,120,,
+2026-11-07T18:15:50,de5d5ad,"exp1: толкования в пояснениях, opus high, запуск 1",claude-opus-5-5,criterion_agreement,0.9917,,tune,,120,,
+2026-11-07T18:15:50,de5d5ad,"exp1: толкования в пояснениях, opus high, запуск 2",claude-opus-5-5,criterion_agreement,0.9917,,tune,,120,,
+2026-11-07T18:15:51,de5d5ad,"exp2: толкования, sonnet-5-5 high",claude-sonnet-5-5,criterion_agreement,0.8917,,tune,,120,,
+2026-11-07T18:15:51,de5d5ad,"exp3: толкования, haiku-5-5",claude-haiku-5-5,criterion_agreement,0.8750,,tune,,120,,
+2026-11-07T18:20:56,839c007,"ЗАМОРОЗКА: opus-5-5 high, чек-лист с толкованиями (839c007), весь DEV",claude-opus-5-5,criterion_agreement,0.9833,,tune,,120,,
+2026-11-07T18:20:56,839c007,"ЗАМОРОЗКА: opus-5-5 high, чек-лист с толкованиями (839c007), весь DEV",claude-opus-5-5,criterion_agreement,0.9875,,holdout,,80,,

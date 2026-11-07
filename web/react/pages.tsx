@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
-import type { Api, Appeal, AudioData, Checklist, DialogRecord, Evaluation, Filters, ListState, Notify } from './types';
-import { Icon, EmptyState, channel, label, number } from './shared';
+import type { Api, Appeal, AudioData, Checklist, DialogRecord, Evaluation, Filters, Health, ListState, Notify } from './types';
+import { Icon, EmptyState, channel, dialogTitle, label, number } from './shared';
 import { EvaluationView } from './result';
 import { ActiveFilters, DensitySwitch, readDensity, SelectionSummary } from './list-tools';
-import { translate as t } from './i18n';
+import { translate as t, translatePlural, formatDecimal } from './i18n';
 import { audioUrl, errorText } from './runtime';
 import { attentionReasons, filterDialogs, hasEvaluation, summarizeDialogs } from '../dialog-utils.mjs';
+import { plainTurnRefs, scoreTone, turnTime } from './text';
 import { ReviewSummary } from './review-tools';
 
 export function StatusBadge({ record }: { record: DialogRecord }) {
@@ -13,16 +14,17 @@ export function StatusBadge({ record }: { record: DialogRecord }) {
   return <span className={`badge ${['completed','done','evaluated'].includes(status)?'badge-green':status==='failed'?'badge-red':''}`}><span className="mini-dot" aria-hidden="true"/>{label(status)}</span>;
 }
 function AttentionBadges({ record, appeals }: { record:DialogRecord; appeals:Appeal[] }) {
-  const names:Record<string,string>={gross:'Грубая ошибка',review:'Нужна проверка',appeal:'Открытая апелляция'};
-  return <>{(attentionReasons(record,appeals) as string[]).map(reason=><span key={reason} className={`badge ${reason==='gross'?'badge-red':'badge-amber'}`}>{reason==='gross'&&<Icon name="alert"/>}{t(names[reason])}</span>)}</>;
+  const names:Record<string,string>={gross:'Грубая ошибка',review:'Нужна проверка',appeal:'Апелляция'};
+  const reasons=attentionReasons(record,appeals) as string[];if(record.open_appeals && !reasons.includes('appeal'))reasons.push('appeal');reasons.sort((a,b)=>['gross','appeal','review'].indexOf(a)-['gross','appeal','review'].indexOf(b));
+  return <>{reasons.map(reason=><span key={reason} className={`badge ${reason==='gross'?'badge-red':'badge-amber'}`}>{reason==='gross'&&<Icon name="alert"/>}{t(names[reason])}</span>)}</>;
 }
 export function DialogRows({ rows, selected, appeals=[], onSelect, onOpen }: { rows:DialogRecord[]; selected:Set<string>; appeals?:Appeal[]; onSelect:(id:string,checked:boolean)=>void; onOpen:(id:string)=>void }) {
   return <>{rows.map(record=><tr key={record.conversation_id} className={selected.has(record.conversation_id)?'selected':''}>
     <td><input type="checkbox" data-select={record.conversation_id} aria-label={t('Выбрать {id}',{id:record.conversation_id})} checked={selected.has(record.conversation_id)} onChange={event=>onSelect(record.conversation_id,event.target.checked)}/></td>
-    <td><button className="dialog-title" data-open={record.conversation_id} onClick={()=>onOpen(record.conversation_id)}>{record.title || record.subject || record.transcript?.find(turn=>turn.speaker==='client')?.text || t('Диалог поддержки')}</button><span className="dialog-subtitle">{record.conversation_id}</span></td>
+    <td><button className="dialog-title" data-open={record.conversation_id} onClick={()=>onOpen(record.conversation_id)}>{dialogTitle(record)}</button><span className="dialog-subtitle">{record.conversation_id}</span>{record.gross_error && record.gross_error_reason && <span className="dialog-gross-reason">{plainTurnRefs(record.gross_error_reason)}</span>}</td>
     <td><span className="channel-icon" aria-hidden="true"><Icon name={record.channel==='voice call'?'phone':'dialogs'}/></span>{channel(record.channel)}</td>
-    <td><span className="badge">{record.language}</span></td><td><div className="row-statuses"><StatusBadge record={record}/><AttentionBadges record={record} appeals={appeals}/></div></td>
-    <td className="score-cell">{number(record.total)} {Number.isFinite(record.total)&&<span>/ 100</span>}</td>
+    <td><span className="badge">{record.language}</span></td><td><div className="row-statuses">{record.status==='error'?<span className="badge badge-red">{t('Ошибка оценки')}</span>:['pending','queued','running'].includes(record.status || '')?<span className="badge">{t('Оценивается')}</span>:!hasEvaluation(record)?<span className="badge">{t('Без оценки')}</span>:null}<AttentionBadges record={record} appeals={appeals}/></div></td>
+    <td className="score-cell"><span className={`score-pill score-${scoreTone(record.total) || "none"}`}>{number(record.total)}</span></td>
     <td><button className="icon-btn" data-open={record.conversation_id} aria-label={t('Открыть {id}',{id:record.conversation_id})} onClick={()=>onOpen(record.conversation_id)}><Icon name="chevron"/></button></td>
   </tr>)}</>;
 }
@@ -107,14 +109,35 @@ export function DialogWorkspace({record,evaluation,checklist,checklists,appeals,
   }
   return <div className="dialog-workspace">
     <a href="#dialogs" className="back-link"><Icon name="arrow-left"/>{t('Все диалоги')}</a>
-    <div className="detail-heading" data-reveal><div><h1>{record.title || t('Карточка диалога')}</h1><div className="detail-meta"><span className="muted small mono">{record.conversation_id}</span><span className="badge">{channel(record.channel)}</span><span className="badge">{record.language}</span><StatusBadge record={{...record,evaluation_id:evaluation?.id,total:evaluation?.total}}/></div></div><div className="detail-actions">{evaluation&&<a className="btn" href={`#report/${encodeURIComponent(record.conversation_id)}`} onClick={event=>{event.preventDefault();onReport();}}><Icon name="download"/>{t('Отчёт')}</a>}<label><span className="sr-only">{t('Чек-лист для оценки')}</span><select id="evaluation-checklist" value={selectedChecklist} onChange={event=>setSelectedChecklist(event.target.value)}>{checklists.map(item=><option key={`${item.id}@${item.version}`} value={item.id}>{item.name} · v{item.version}</option>)}</select></label><button className="btn btn-primary" data-action="evaluate-dialog" disabled={busy||!selectedChecklist} onClick={()=>{if(!busy&&selectedChecklist)onEvaluate([record.conversation_id],selectedChecklist);}}>{t(evaluation?'Оценить заново':'Оценить диалог')}<Icon name="arrow-right"/></button></div></div>
+    <div className="detail-heading" data-reveal><div><h1>{dialogTitle(record,'Карточка диалога')}</h1><div className="detail-meta"><span className="muted small mono">{record.conversation_id}</span><span className="badge">{channel(record.channel)}</span><span className="badge">{record.language}</span><StatusBadge record={{...record,evaluation_id:evaluation?.id,total:evaluation?.total}}/></div></div><div className="detail-actions">{evaluation&&<a className="btn" href={`#report/${encodeURIComponent(record.conversation_id)}`} onClick={event=>{event.preventDefault();onReport();}}><Icon name="download"/>{t('Отчёт')}</a>}<label><span className="sr-only">{t('Чек-лист для оценки')}</span><select id="evaluation-checklist" value={selectedChecklist} onChange={event=>setSelectedChecklist(event.target.value)}>{checklists.map(item=><option key={`${item.id}@${item.version}`} value={item.id}>{item.name} · v{item.version}</option>)}</select></label><button className="btn btn-primary" data-action="evaluate-dialog" disabled={busy||!selectedChecklist} onClick={()=>{if(!busy&&selectedChecklist)onEvaluate([record.conversation_id],selectedChecklist);}}>{t(evaluation?'Оценить заново':'Оценить диалог')}<Icon name="arrow-right"/></button></div></div>
     {evaluation&&<ReviewSummary evaluation={evaluation} checklist={checklist} onBackToMap={()=>{setHighlight(null);setEvidenceCriterion(null);}}/>}
     <div className="split-view detail-top"><section className="panel" data-reveal><div className="panel-heading"><h2>{t('Транскрипт')}</h2><span className="muted small">{t('{count} реплик',{count:transcript.length})}</span></div>
       {record.channel==='voice call'&&<div className="audio-block" id="audio-block">{audio?<><label className="small">{t(demo?'Учебный звуковой сигнал, не запись разговора':'Запись разговора')}</label><audio ref={audioRef} id="call-audio" controls preload="metadata" src={audio.url} onLoadedMetadata={applySeek}/><p className="audio-caption">{t('Кнопка доказательства перематывает запись. Автовоспроизведение отключено.')}</p><button className="text-btn" data-action="refresh-audio" disabled={audioLoading} onClick={()=>{pendingSeek.current=null;void loadAudio(true);}}>{t('Обновить ссылку')}</button></>:<><button className="btn btn-small" data-action="audio" disabled={audioLoading} onClick={()=>void loadAudio()}>{t(audioLoading?'Получаем свежую ссылку на запись…':'Загрузить запись')}</button><p className="audio-caption">{t('Запись загружается по свежей ссылке.')}</p></>}{audioError&&<p className="danger small" role="alert">{t(audioError)}</p>}</div>}
-      <div className="quiet-line">{t('Оценивается оператор. Бот и система дают контекст.')}</div><div className="transcript" id="transcript" ref={transcriptRef}>{transcript.length?transcript.map((turn,index)=><article id={`turn-${index}`} key={index} className={`turn turn-${Object.hasOwn(roles,turn.speaker)?turn.speaker:'system'} ${highlight&&index>=highlight.from&&index<=highlight.to?'highlight':''}`} tabIndex={-1}><div className="turn-meta"><strong>{roles[turn.speaker] || turn.speaker}</strong><span>№ {index+1}{turn.timestamp?` · ${turn.timestamp}`:''}</span>{highlight&&index>=highlight.from&&index<=highlight.to&&<span className="turn-evidence-label">{t('Доказательство')}</span>}</div><p>{turn.text}</p></article>):<p className="muted small">{t('Транскрипт не содержит реплик.')}</p>}</div>
+      <div className="quiet-line">{t('Оценивается оператор. Бот и система дают контекст.')}</div><div className="transcript" id="transcript" ref={transcriptRef}>{transcript.length?transcript.map((turn,index)=><article id={`turn-${index}`} key={index} className={`turn turn-${Object.hasOwn(roles,turn.speaker)?turn.speaker:'system'} ${highlight&&index>=highlight.from&&index<=highlight.to?'highlight':''}`} tabIndex={-1}><div className="turn-meta"><strong>{roles[turn.speaker] || turn.speaker}</strong><span>№ {index+1}{turn.timestamp?` · ${turnTime(turn)}`:''}</span>{highlight&&index>=highlight.from&&index<=highlight.to&&<span className="turn-evidence-label">{t('Доказательство')}</span>}</div><p>{turn.text}</p></article>):<p className="muted small">{t('Транскрипт не содержит реплик.')}</p>}</div>
     </section><section className="panel" id="evaluation-panel" data-reveal onClick={onResultClick}><EvaluationView evaluation={evaluation} checklist={checklist} appeals={appeals} dialog={record} demo={demo} selectedCriterion={evidenceCriterion} onCriterionNavigate={()=>{setHighlight(null);setEvidenceCriterion(null);}}/></section></div>
   </div>;
 }
 
 export function LoadingView() {return <div className="panel loading" aria-label={t('Загрузка')} aria-busy="true"><div className="skeleton wide"/><div className="skeleton"/><div className="skeleton"/><div className="skeleton wide"/></div>;}
 export function ErrorView({message,onRetry,onSettings,onDemo}:{message:string;onRetry?:()=>void;onSettings?:()=>void;onDemo?:()=>void}) {return <><div className="page-heading"><div><h1>{t('Нет подключения к данным')}</h1><p>{t('Интерфейс работает, но сервер пока не ответил.')}</p></div></div><section className="panel"><EmptyState title={t('Не удалось получить данные')} text={message} actions={<><button className="btn btn-primary" data-action="retry" onClick={onRetry}>{t('Повторить')}</button><button className="btn" data-action="settings" onClick={onSettings}>{t('Настроить API')}</button><button className="btn btn-ghost" data-action="demo" onClick={onDemo}>{t('Открыть учебный пример')}</button></>}/></section></>;}
+
+/** Price and duration of a run, from the server's recent real evaluations. Shown above the paid-run confirmation. */
+export function EstimateNote({ health, count }: { health?: Health | null; count: number }) {
+  if (!health) return null;
+  if (health.provider === 'mock') return <p className="estimate-note estimate-free">{t('Тестовый режим: модель не вызывается, оценка бесплатная.')}</p>;
+  if (health.provider === 'demo') return <p className="estimate-note estimate-free">{t('Учебный пример: модель не вызывается, оценка бесплатная.')}</p>;
+  const model = health.model || 'AI';
+  const estimate = health.estimate;
+  const cost = estimate?.cost_per_dialog_usd;
+  if (typeof cost !== 'number' || !Number.isFinite(cost)) return <p className="estimate-note">{t('Модель {model}. Примерную цену покажем после первых оценок.', { model })}</p>;
+  const perDialog = typeof estimate?.seconds_per_dialog === 'number' && estimate.seconds_per_dialog > 0 ? estimate.seconds_per_dialog : null;
+  const workers = Math.max(1, Math.floor(Number(estimate?.workers) || 1));
+  const seconds = perDialog == null ? null : Math.ceil(count / workers) * perDialog;
+  const time = seconds == null ? null : seconds < 60 ? t('{s} с', { s: Math.max(1, Math.ceil(seconds)) }) : t('{m} мин', { m: Math.ceil(seconds / 60) });
+  const total = `$${formatDecimal(count * cost, 2)}`;
+  const first = time
+    ? translatePlural(count, { one: 'Оценка {count} диалога: ≈ {cost} и около {time}.', few: 'Оценка {count} диалогов: ≈ {cost} и около {time}.', many: 'Оценка {count} диалогов: ≈ {cost} и около {time}.' }, { cost: total, time })
+    : translatePlural(count, { one: 'Оценка {count} диалога: ≈ {cost}.', few: 'Оценка {count} диалогов: ≈ {cost}.', many: 'Оценка {count} диалогов: ≈ {cost}.' }, { cost: total });
+  const basis = translatePlural(Number(estimate?.based_on) || 0, { one: 'Модель {model}, в среднем {cost} за диалог по {count} последней оценке.', few: 'Модель {model}, в среднем {cost} за диалог по {count} последним оценкам.', many: 'Модель {model}, в среднем {cost} за диалог по {count} последним оценкам.' }, { model, cost: `$${formatDecimal(cost, 2, 3)}` });
+  return <p className="estimate-note"><strong>{first}</strong> {basis}</p>;
+}

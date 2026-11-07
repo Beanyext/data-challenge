@@ -1,5 +1,7 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, type ReactNode } from 'react';
 import { translate as t, formatNumber } from './i18n';
+import type { DialogRecord } from './types';
+import { TURN_REFERENCE, formatDuration } from './text';
 
 const symbols: Record<string, ReactNode> = {
   'dialogs': <><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z"/><path d="M8 9h8M8 13h5"/></>,
@@ -35,6 +37,40 @@ export function Icon({ name }: { name: string }) {
 export const number = formatNumber;
 export const label = (value: unknown): string => t({ yes:'Да', no:'Нет', na:'N/A', open:'Открыта', confirmed:'Подтверждена', changed:'Пересмотрена', completed:'Оценён', done:'Оценён', evaluated:'Оценён', pending:'Без оценки', new:'Без оценки', queued:'В очереди', running:'В обработке', failed:'Ошибка' }[String(value)] ?? String(value ?? '—'));
 export const channel = (value: string) => t(value === 'voice call' ? 'Звонок' : 'Чат');
+/** Calls are named by language and length: the first client message of a call is not a usable title. */
+export function dialogTitle(record: DialogRecord, fallback = 'Диалог поддержки'): string {
+  if (record.channel === 'voice call') {
+    const duration = formatDuration(record.duration_seconds);
+    return duration ? t('Звонок · {language} · {duration}', { language: record.language, duration }) : t('Звонок · {language}', { language: record.language });
+  }
+  return record.title || record.subject || record.transcript?.find(turn => turn.speaker === 'client')?.text || t(fallback);
+}
+
+/**
+ * Explanation text with «[N]» turned into «№ N». `reference(n)` receives the 1-based message number and returns
+ * a control for it, or null when the number cannot be followed (outside the transcript, print, list preview).
+ */
+export function TurnText({ text, reference }: { text?: string | null; reference?: (n: number) => ReactNode | null }) {
+  const source = String(text ?? '');
+  const parts: ReactNode[] = [];
+  let last = 0;
+  for (const match of source.matchAll(TURN_REFERENCE)) {
+    const index = match.index ?? 0;
+    if (index > last) parts.push(source.slice(last, index));
+    const n = Number(match[1]);
+    parts.push(reference?.(n) ?? `№ ${n}`);
+    last = index + match[0].length;
+  }
+  if (last < source.length) parts.push(source.slice(last));
+  return <>{parts.map((part, index) => <Fragment key={index}>{part}</Fragment>)}</>;
+}
+
+/** Turn number button that uses the existing evidence action (data-turn is the 0-based index). */
+export function TurnButton({ n, label }: { n: number; label?: string }) {
+  return <button type="button" className="turn-ref" data-turn={n - 1} aria-label={t('Перейти к реплике № {n}', { n })} title={t('Перейти к реплике № {n}', { n })}>{label ?? `№ ${n}`}</button>;
+}
+export const transcriptReference = (length: number) => (n: number) => n >= 1 && n <= length ? <TurnButton n={n}/> : null;
+
 export function EmptyState({ title, text, actions }: { title: string; text: string; actions?: ReactNode }) {
   return <div className="empty-state"><div className="empty-symbol" aria-hidden="true"><Icon name="dialogs"/></div><h2>{title}</h2><p>{text}</p><div className="actions">{actions}</div></div>;
 }
