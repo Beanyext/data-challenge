@@ -181,6 +181,7 @@ function updateEditor(target) {
   S.dirty=true;
   if($('#dirty-label')) {$('#dirty-label').textContent=t('Есть изменения');$('#dirty-label').classList.add('badge-amber');}
   if($('#weight-total')) $('#weight-total').textContent=num(S.editor.criteria.filter(c=>!c.gross_error).reduce((sum,c)=>sum+Number(c.weight),0));
+  if(field==='title'&&c&&$('#criterion-heading')) $('#criterion-heading').textContent=c.title || t('Критерий {number}',{number:String(S.criterionIndex+1).padStart(2,'0')});
   if(field==='steps'&&$('#scale-preview')) ui.scale(c?.scale);
   if(['answer_type','gross_error','na_allowed'].includes(field)) renderEditor();
 }
@@ -213,6 +214,8 @@ function renderAppeals() { ui.appeals({appeals:S.appeals,filter:S.appealFilter,t
 async function showReview(id) {
   const appeal=S.appeals.find(a=>a.id===id);
   const area=document.getElementById(`review-${id}`);
+  const evidence=document.getElementById(`appeal-evidence-${id}`);
+  if(evidence)evidence.open=true;
   area.hidden=false;ui.reviewMessage(id,'Загрузка оценки…');
   try {
     const ev=await api.getEvaluation(appeal.evaluation_id);
@@ -362,6 +365,7 @@ window.addEventListener('hashchange',async()=>{
 function showFragmentTurn(appealId, turn) {
   const row=document.getElementById(`appeal-${appealId}-turn-${turn}`);
   if(!row)return;
+  const evidence=row.closest('details');if(evidence)evidence.open=true;
   document.querySelectorAll('.appeal-fragment li.highlight').forEach(item=>item.classList.remove('highlight'));
   row.classList.add('highlight');
   row.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'nearest'});

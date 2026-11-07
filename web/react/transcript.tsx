@@ -7,6 +7,7 @@ import { Slot } from './slots';
 import { EvaluationView, type EvaluationNavigation } from './result';
 import { clearLinkedEvidence } from './review-tools';
 import { linkedMessageCriteria, validMessageIndex } from './message-analysis';
+import { Icon } from './shared';
 
 type WorkspacePane = 'dialog' | 'evaluation';
 type PanePosition = { page: number | null; content: number };
@@ -78,7 +79,7 @@ export function TranscriptWorkspace({ record, evaluation, checklist, appeals, de
       {record.channel === 'voice call' && <div className="audio-block" id="audio-block"><Slot name="audio-block" fallback={<><button className="btn btn-small" data-action="audio">{t('Загрузить запись')}</button><p className="audio-caption">{t('Запись загружается по свежей ссылке.')}</p></>}/></div>}
       <div className="quiet-line">{t('Нажмите на сообщение оператора, чтобы перейти к его разбору в оценке.')}</div>
       <div className="transcript" id="transcript">{transcript.map((turn, index) => {
-        const metadata = <span className="turn-meta"><strong>{roles[turn.speaker] || turn.speaker}</strong><span>№ {index + 1}{turnTime(turn) && ` · ${turnTime(turn)}`}</span><span className="turn-evidence-label">{t('Доказательство')}</span></span>;
+        const metadata = <span className="turn-meta"><strong>{roles[turn.speaker] || turn.speaker}</strong><span>№ {index + 1}{turnTime(turn) && ` · ${turnTime(turn)}`}{turn.speaker === 'operator' && <Icon name="chevron"/>}</span><span className="turn-evidence-label">{t('Доказательство')}</span></span>;
         return <Fragment key={index}><article id={`turn-${index}`} className={`turn turn-${Object.hasOwn(roles, turn.speaker) ? turn.speaker : 'system'}`} tabIndex={-1}>
           {turn.speaker === 'operator' ? <button type="button" className="turn-inspect-button" data-inspect-turn={index} aria-controls="evaluation-panel" aria-label={t('Перейти к разбору сообщения оператора № {n}', { n: index + 1 })} onClick={() => navigate(index)}>{metadata}<span className="turn-text">{turn.text}</span><span className="turn-inspect-hint">{t('К разбору в оценке')}</span></button> : <>{metadata}<p>{turn.text}</p></>}
         </article>{unlinkedTurn === index && <p className="message-navigation-note" role="status">{t(evaluation ? 'В готовой оценке нет ссылки на эту реплику. Это не означает, что в ней нет ошибок.' : 'Диалог ещё не оценён. Перейти к разбору пока нельзя.')}</p>}</Fragment>;

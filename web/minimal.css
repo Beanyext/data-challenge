@@ -26,7 +26,7 @@
   .connection-button:hover { background: #eef3f0; color: #164e36; }
   .connection-dot { background: #087f5b; }
   .app-shell { margin-left: 204px; }
-  .topbar { min-height: 52px; padding: 0 28px; background: #fff; }
+  .topbar { height: 52px; min-height: 52px; padding: 0 28px; background: #fff; }
   .topbar::before { display: none; }
   .topbar-parent, .breadcrumb-sep { display: none; }
   .demo-banner { padding: 8px 28px; font-size: 12px; background: #f0f5f2; color: #466052; }
@@ -65,6 +65,7 @@
   .turn-inspect-button p { margin-bottom: 0; }
   .turn-inspect-button:focus-visible { outline: 2px solid #087f5b; outline-offset: 3px; }
   .turn-inspect-hint { display: none; }
+  .turn-meta .ui-icon { width: 14px; height: 14px; margin-left: 6px; color: #537661; }
   .turn-text { display: block; font-size: 15px; line-height: 1.65; white-space: pre-wrap; }
   .message-workspace .turn p { font-size: 15px; line-height: 1.65; }
   .message-navigation-note { margin: 0 0 8px; padding: 8px 12px; color: #52665a; font-size: 13px; line-height: 1.6; }
@@ -156,7 +157,7 @@
   .editor-scale-guide { background: #f7f9f8; box-shadow: none; border: 0; border-radius: 6px; }
   .appeal-card { border: 1px solid var(--line); border-radius: 8px; padding: 20px; box-shadow: none; }
   .appeal-perspectives { gap: 16px; }
-  .appeal-perspectives>div { border: 0; padding: 0; background: transparent; }
+  .appeal-perspectives>section { border: 0; padding: 0; background: transparent; }
   .appeal-evidence { margin-top: 16px; border-top: 1px solid var(--line); }
   .appeal-evidence>summary { min-height: 44px; padding: 12px 0; color: #096246; font-size: 14px; cursor: pointer; }
   .appeal-evidence>summary:focus-visible { outline: 2px solid #087f5b; outline-offset: 2px; }
@@ -167,6 +168,10 @@
   .loading-workspace { display: grid; grid-template-columns: 1.18fr 1fr; gap: 20px; }
   .loading-workspace .loading { min-height: 320px; }
   .loading-editor { grid-template-columns: 240px 1fr; }
+
+  @media (min-width: 1100px) {
+    .message-workspace>.transcript-panel { position: sticky; top: var(--review-offset); }
+  }
 
   @media (min-width: 851px) {
     .focus-mode .sidebar { width: 72px; padding-left: 12px; padding-right: 12px; }
