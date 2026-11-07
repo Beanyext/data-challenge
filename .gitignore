@@ -16,6 +16,8 @@ models/
 .venv/
 __pycache__/
 .pytest_cache/
+.playwright-mcp/
+node_modules/
 .ipynb_checkpoints/
 
 # Секреты

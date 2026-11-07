@@ -52,6 +52,24 @@ def client(tmp_path):
         yield c
 
 
+def test_serves_interface_with_module_types(tmp_path, monkeypatch):
+    """Интерфейс с того же адреса, что и API. Типы файлов не зависят от реестра Windows."""
+    import mimetypes
+    web = tmp_path / "web"
+    web.mkdir()
+    for name, text in (("index.html", "<!doctype html><title>CQA</title>"), ("app.mjs", "export {}"),
+                       ("react-ui.js", "void 0"), ("styles.css", "body{}"), ("logo.svg", "<svg/>")):
+        (web / name).write_text(text, encoding="utf-8")
+    monkeypatch.setitem(mimetypes.types_map, ".js", "text/plain")  # как на машине с испорченным реестром
+    monkeypatch.setitem(mimetypes.types_map, ".mjs", "text/plain")
+    app = create_app(db_path=tmp_path / "cqa.sqlite3", provider="mock", web_dir=web, data_dir=tmp_path / "raw", env_file=None)
+    with TestClient(app) as c:
+        assert "CQA" in c.get("/").text
+        types = {p: c.get(p).headers["content-type"].split(";")[0] for p in ("/app.mjs", "/react-ui.js", "/styles.css", "/logo.svg")}
+        assert types == {"/app.mjs": "text/javascript", "/react-ui.js": "text/javascript", "/styles.css": "text/css", "/logo.svg": "image/svg+xml"}
+        assert c.get("/api/health").json()["ok"] is True
+
+
 def upload(c, doc, name="dialogs.json"):
     return c.post("/api/dialogs/upload", files={"file": (name, json.dumps(doc, ensure_ascii=False).encode("utf-8"), "application/json")})
 
@@ -121,13 +139,14 @@ def test_full_path_evaluate_appeal_decision_new_version(client):
     assert job["status"] == "completed" and job["completed"] == 2 and job["failed"] == 0
     ev_id = job["evaluation_ids"][0]
     ev = client.get(f"/api/evaluations/{ev_id}").json()
-    assert ev["status"] == "done" and ev["total"] == 100.0 and ev["original_total"] == 100.0
+    # без решения по апелляции исходного итога нет: интерфейс по нему показывает блок «Пересмотр результата»
+    assert ev["status"] == "done" and ev["total"] == 100.0 and ev["original_total"] is None
     assert ev["checklist"]["version"] == 1 and len(ev["criteria"]) == 8
     c06 = next(c for c in ev["criteria"] if c["criterion_id"] == "c06")
     assert c06["points"] == 15.0 and c06["raw_points"] == 15.0 and c06["effective_weight"] == 15.0
     assert c06["evidence"] and c06["evidence"][0]["turn"] == 3
     row = next(d for d in client.get("/api/dialogs").json() if d["conversation_id"] == "t-1")
-    assert row["status"] == "evaluated" and row["evaluation_id"] == ev_id and row["total"] == 100.0
+    assert row["status"] == "evaluated" and row["evaluation_id"] == ev_id and row["total"] == 100.0 and row["original_total"] is None
 
     ap = client.post("/api/appeals", json={"evaluation_id": ev_id, "criterion_id": "c07", "comment": "Не попрощался"})
     assert ap.status_code == 200

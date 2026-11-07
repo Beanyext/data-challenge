@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import json
+import mimetypes
 import os
 import threading
 import time
@@ -407,6 +408,11 @@ def create_app(db_path: str | Path | None = None, provider: str | None = None, w
 
     web = None if web_dir is False else Path(web_dir) if web_dir else ROOT / "web"
     if web is not None and (web / "index.html").exists():
+        # Python на Windows берёт типы файлов из реестра, а там у .js бывает text/plain:
+        # тогда браузер не запускает модули и страница остаётся пустой. Типы задаём явно.
+        for ext, mime in ((".js", "text/javascript"), (".mjs", "text/javascript"), (".css", "text/css"),
+                          (".svg", "image/svg+xml"), (".json", "application/json")):
+            mimetypes.add_type(mime, ext)
         app.mount("/", StaticFiles(directory=str(web), html=True), name="web")
     else:
         @app.get("/")

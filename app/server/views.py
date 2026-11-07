@@ -68,7 +68,8 @@ def evaluation_view(store: Store, ev: dict, with_appeals: bool = True) -> dict:
         **base, "status": "done", "model": result.get("model"), "provider": result.get("provider"),
         "attempts": result.get("attempts"), "cost_usd": result.get("cost_usd"), "evaluated_at": result.get("evaluated_at"),
         "total": s_final["total"], "gross_error": s_final["gross_error"],
-        "original_total": s_orig["total"], "original_gross_error": s_orig["gross_error"],
+        # Исходный итог только после решения по апелляции: интерфейс по самому полю показывает блок «Пересмотр результата».
+        "original_total": s_orig["total"] if decisions else None, "original_gross_error": s_orig["gross_error"],
         "complete": s_final["complete"], "missing": s_final["missing"],
         "points": s_final["points"], "weight_sum": s_final["weight_sum"],
         "sections": sections, "criteria": criteria,

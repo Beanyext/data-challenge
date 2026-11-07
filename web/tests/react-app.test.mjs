@@ -1,0 +1,259 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { JSDOM } from 'jsdom';
+import { storeLanguageDraft } from '../language-draft.mjs';
+
+test('built React interface preserves selection, filters, forms, evidence and appeal workflow', async () => {
+  const html = await readFile('web/index.html', 'utf8');
+  const locale = process.env.CQA_TEST_LOCALE || 'ru';
+  const dom = new JSDOM(html, { url: `http://localhost:8765/?demo=1&lang=${locale}`, pretendToBeVisual: true });
+  const { window } = dom;
+  const saved = new Map();
+  const timers = new Set();
+  const nativeSetTimeout = globalThis.setTimeout;
+  const nativeClearTimeout = globalThis.clearTimeout;
+  const trackedSetTimeout = (callback, delay, ...args) => {
+    const timer = nativeSetTimeout(() => { timers.delete(timer); callback(...args); }, delay);
+    timers.add(timer); return timer;
+  };
+  const trackedClearTimeout = timer => { timers.delete(timer); nativeClearTimeout(timer); };
+  for (const name of ['window','document','navigator','location','history','localStorage','sessionStorage','Node','Element','HTMLElement','HTMLDetailsElement','HTMLInputElement','FormData','Event','MouseEvent','KeyboardEvent','MutationObserver','getComputedStyle']) {
+    saved.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
+    Object.defineProperty(globalThis, name, { value: window[name], writable: true, configurable: true });
+  }
+  window.scrollTo = () => {};
+  let printCalls = 0;
+  window.print = () => {
+    printCalls++;
+    window.dispatchEvent(new window.Event('beforeprint'));
+    window.dispatchEvent(new window.Event('afterprint'));
+  };
+  window.HTMLElement.prototype.scrollIntoView = () => {};
+  window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+  window.HTMLDialogElement.prototype.close = function () { this.open = false; };
+  window.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} });
+  for (const [name, value] of Object.entries({ matchMedia: window.matchMedia, requestAnimationFrame: window.requestAnimationFrame.bind(window), cancelAnimationFrame: window.cancelAnimationFrame.bind(window), setTimeout: trackedSetTimeout, clearTimeout: trackedClearTimeout, confirm: () => true })) {
+    saved.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
+    Object.defineProperty(globalThis, name, { value, writable: true, configurable: true });
+  }
+  const q = selector => window.document.querySelector(selector);
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  async function until(condition, message) {
+    for (let i = 0; i < 100; i++) { if (condition()) return; await sleep(20); }
+    assert.fail(message);
+  }
+  function change(selector, value, type = 'change') {
+    const element = q(selector); assert.ok(element, selector);
+    element.value = value; element.dispatchEvent(new window.Event(type, { bubbles: true }));
+  }
+  let uiModule;
+  try {
+    if (process.env.CQA_TEST_RESTORE) {
+      const { createApi } = await import('../api.mjs');
+      const api = createApi({demo:true});
+      const draft = {locale,route:'#checklists',filters:{query:'',channel:'',language:'',status:''},selected:[],forms:[],criterionIndex:0,appealFilter:'open'};
+      if (process.env.CQA_TEST_RESTORE === 'editor') {
+        const checklist = structuredClone((await api.listChecklists())[0]);
+        checklist.criteria[0].title = 'Незавершённый черновик';
+        checklist.criteria[0].answer_type = 'scale';
+        checklist.criteria[0].scale = {min:0,max:10,steps:[{value:NaN,label:'draft'}]};
+        checklist.criteria[0]._stepsText = 'x | Незавершённая строка';
+        draft.editor = checklist;
+      } else {
+        const record = (await api.listDialogs())[0];
+        const evaluation = await api.getEvaluation(record.evaluation_id);
+        const criterionId = evaluation.criteria[0].criterion_id;
+        draft.route = `#dialog/${record.conversation_id}`;
+        draft.modal = {title:'Оспорить оценку',formId:'appeal-form',contents:{kind:'appeal',criterionId,title:'Исходное название'}};
+        draft.forms = [{id:'appeal-form',fields:[{name:'comment',type:'textarea',value:'Черновик апелляции до смены языка',checked:false,disabled:false}]}];
+      }
+      window.history.replaceState(null,'',`?demo=1&lang=${locale}${draft.route}`);
+      storeLanguageDraft(draft,window.sessionStorage);
+    }
+    window.localStorage.setItem('cqa-focus-mode', 'true');
+    await import('../app.mjs');
+    uiModule = await import('../react-ui.js');
+    assert.equal(document.documentElement.lang, locale);
+    assert.equal(q('[data-nav="dialogs"] [data-i18n]').textContent, uiModule.translate('Диалоги'));
+    if (process.env.CQA_TEST_RESTORE === 'editor') {
+      await until(() => q('[data-criterion="title"]'), 'editor draft restored on language reload');
+      assert.equal(q('[data-criterion="title"]').value, 'Незавершённый черновик');
+      assert.equal(q('[data-criterion="steps"]').value, 'x | Незавершённая строка');
+      window.location.hash = 'dialogs';
+    } else if (process.env.CQA_TEST_RESTORE === 'modal') {
+      await until(() => q('#appeal-form textarea'), 'appeal draft reopened after language reload');
+      assert.equal(q('#appeal-form textarea').value, 'Черновик апелляции до смены языка');
+      assert.equal(q('#modal-title').textContent, uiModule.translate('Оспорить оценку'));
+      q('[data-action="close-modal"]').click();
+      window.location.hash = 'dialogs';
+    }
+    await until(() => q('#dialog-rows')?.children.length === 6, 'initial six rows');
+    assert.ok(document.documentElement.classList.contains('focus-mode'), 'focus preference restores on boot');
+    assert.equal(q('[data-focus-toggle]').getAttribute('aria-pressed'), 'true');
+    q('[data-focus-toggle]').click();
+    await until(() => !document.documentElement.classList.contains('focus-mode'), 'focus mode exits');
+    assert.equal(window.localStorage.getItem('cqa-focus-mode'), 'false');
+    q('[data-focus-toggle]').click();
+    await until(() => document.documentElement.classList.contains('focus-mode'), 'focus mode re-enters');
+    const languageTrigger = q('.language-trigger');
+    languageTrigger.click();
+    await until(() => q('#language-menu'), 'language menu opens');
+    assert.equal(document.activeElement.dataset.language, locale);
+    q('[data-language="'+locale+'"]').dispatchEvent(new window.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));
+    assert.notEqual(document.activeElement.dataset.language, locale);
+    document.activeElement.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+    await until(() => !q('#language-menu'), 'Escape closes language menu');
+    assert.equal(document.activeElement, languageTrigger);
+    const firstCheckbox = q('[data-select]');
+    firstCheckbox.click();
+    assert.equal(q('#evaluate-selected').disabled, false);
+    assert.equal(q('[data-select]').checked, true);
+    assert.match(q('#evaluate-selected').textContent, /1/);
+    q('.density-control button:last-child').click();
+    await until(() => q('.dialog-list').dataset.density === 'compact', 'compact view applies');
+    assert.equal(window.localStorage.getItem('cqa-table-density'), 'compact');
+    assert.equal(q('[data-select]').checked, true, 'display changes preserve row selection');
+    assert.equal(q('#evaluate-selected').disabled, false);
+    q('[data-action="clear-selection"]').click();
+    assert.equal(q('#evaluate-selected').disabled, true);
+    assert.equal(q('[data-select]').checked, false);
+    q('#select-all').click();
+    assert.equal(window.document.querySelectorAll('[data-select]:checked').length, 6);
+    q('#select-all').click();
+    assert.equal(window.document.querySelectorAll('[data-select]:checked').length, 0);
+
+    change('[data-filter="language"]', 'KZ');
+    assert.ok(q('#dialog-rows').children.length > 0 && q('#dialog-rows').children.length < 6);
+    change('#search-dialogs', 'definitely-no-match', 'input');
+    assert.equal(q('#dialog-rows').children.length, 0);
+    assert.equal(q('#list-empty').hidden, false);
+    assert.equal(q('#search-dialogs').value, 'definitely-no-match');
+    assert.ok(q('[data-clear-filter="language"]'));
+    q('[data-clear-filter="query"]').click();
+    assert.equal(q('#search-dialogs').value, '');
+    assert.equal(q('[data-filter="language"]').value, 'KZ');
+    assert.ok(q('#dialog-rows').children.length > 0 && q('#dialog-rows').children.length < 6);
+    assert.equal(document.activeElement, q('#search-dialogs'));
+    q('[data-action="reset-filters"]').click();
+    assert.equal(q('#dialog-rows').children.length, 6);
+    assert.equal(q('.active-filters'), null);
+    assert.equal(q('.dialog-list').dataset.density, 'compact', 'density survives view remount');
+    assert.equal(q('[data-filter="channel"]').options.length, 3);
+    q('[data-open]').click();
+    await until(() => q('#evaluation-panel'), 'dialog opens');
+    assert.ok(q('.result-score'));
+    const routeBeforeCriterion = window.location.hash;
+    const mapButton = q('.result-nav-item');
+    const targetId = mapButton.getAttribute('aria-controls');
+    mapButton.click();
+    await until(() => mapButton.getAttribute('aria-current') === 'location', 'criterion navigation marks the active item');
+    assert.equal(window.location.hash, routeBeforeCriterion, 'criterion navigation must not change the application route');
+    assert.equal(document.activeElement.id, targetId);
+    assert.equal(q('.result-calculation').open, false);
+    assert.equal(q('.result-evidence-primary').closest('details'), null, 'first evidence stays visible');
+    assert.equal(q('.result-points').closest('details'), null, 'score contribution stays visible');
+    q('.result-calculation summary').click();
+    await until(() => q('.result-calculation').open, 'score breakdown expands');
+    q('[data-turn]').click();
+    assert.ok(q('.turn.highlight'));
+    assert.equal(q('.result-criterion.evidence-selected'), q('[data-turn]').closest('.result-criterion'));
+    const secondEvidence = [...document.querySelectorAll('[data-turn]')].find(button => button.closest('.result-criterion') !== q('.result-criterion.evidence-selected'));
+    if (secondEvidence) {
+      secondEvidence.click();
+      assert.equal(document.querySelectorAll('.result-criterion.evidence-selected').length, 1);
+      assert.equal(q('.result-criterion.evidence-selected'), secondEvidence.closest('.result-criterion'));
+      assert.equal(q('.turn.highlight').id, `turn-${secondEvidence.dataset.turn}`);
+    }
+    assert.ok(q('.review-summary'));
+    q('[data-back-to-map]').click();
+    assert.equal(document.activeElement.id, 'criteria-map');
+    assert.equal(window.location.hash, routeBeforeCriterion);
+    const openDetailsBeforePrint = [...document.querySelectorAll('details')].map(element => element.open);
+    q('#transcript').scrollTop = 123;
+    const highlightedBeforePrint = q('.turn.highlight').id;
+    q('[data-print-report]').click();
+    assert.equal(printCalls, 1);
+    window.dispatchEvent(new window.Event('beforeprint')); // Ctrl+P uses the same complete report.
+    window.dispatchEvent(new window.Event('afterprint'));
+    assert.deepEqual([...document.querySelectorAll('details')].map(element => element.open), openDetailsBeforePrint);
+    assert.equal(q('#transcript').scrollTop, 123);
+    assert.equal(q('.turn.highlight').id, highlightedBeforePrint);
+    assert.equal(window.location.hash, routeBeforeCriterion);
+    assert.ok(document.documentElement.classList.contains('focus-mode'));
+    assert.equal(document.querySelectorAll('.print-turn').length, document.querySelectorAll('#transcript .turn').length);
+    assert.equal(q('.print-report details'), null);
+    assert.equal(q('.print-report [id]'), null, 'report does not duplicate application IDs');
+    const criterionId = q('[data-appeal]').dataset.appeal;
+    q('[data-appeal]').click();
+    assert.ok(q('#modal').open);
+    change('#appeal-form textarea', 'Проверка React: учтите контекст диалога', 'input');
+    q('#appeal-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    await until(() => q(`[data-appeal="${criterionId}"]`)?.disabled, 'appeal is stored and reflected');
+
+    window.location.hash = 'appeals';
+    await until(() => q('[data-review]'), 'appeal queue opens');
+    q('[data-review]').click();
+    await until(() => q('[data-decision]'), 'review form loads');
+    q('[name="decision-status"][value="changed"]').click();
+    assert.equal(q('select[name="answer"]').disabled, false);
+    change('[name="reason"]', 'Контекст проверен', 'input');
+    q('[data-decision]').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    await until(() => q('.appeal-queue') && !q('[data-review]'), 'review stored');
+    q('[data-appeal-filter="all"]').click();
+    assert.match(q('.appeal-queue').textContent, /Контекст проверен/);
+
+    window.location.hash = 'checklists';
+    await until(() => q('.checklist-configuration'), 'editor opens');
+    const title = q('[data-criterion="title"]');
+    const expectedTitle = title.value + ' — React';
+    change('[data-criterion="title"]', expectedTitle, 'input');
+    assert.equal(q('#dirty-label').textContent, uiModule.translate('Есть изменения'));
+    change('[data-criterion="answer_type"]', 'scale', 'input');
+    assert.equal(q('[data-criterion="title"]').value, expectedTitle);
+    change('[data-criterion="steps"]', '0 | Нет\n7 | Частично\n10 | Полностью', 'input');
+    assert.equal(q('#scale-preview tbody').children.length, 3);
+    assert.match(q('#scale-preview').textContent, /Частично/);
+    assert.equal(q('[data-criterion="steps"]').value, '0 | Нет\n7 | Частично\n10 | Полностью');
+    q('[data-criterion-index="1"]').click();
+    q('[data-criterion-index="0"]').click();
+    assert.equal(q('[data-criterion="title"]').value, expectedTitle);
+    q('[data-action="save-checklist"]').click();
+    await until(() => q('#dirty-label')?.textContent === uiModule.translate('Сохранено'), 'checklist saved');
+    assert.equal(q('[data-criterion="title"]').value, expectedTitle);
+    assert.equal(q('#editor-errors').textContent, '');
+
+    q('[data-action="settings"]').click();
+    assert.ok(q('#settings-form'));
+    assert.equal(new window.FormData(q('#settings-form')).get('mode'), 'demo');
+    q('[data-action="close-modal"]').click();
+    assert.equal(q('#modal').open, false);
+
+    window.location.hash = 'dialogs';
+    await until(() => q('#dialog-rows')?.children.length === 6, 'return to dialogs');
+    assert.equal(q('.dialog-list').dataset.density, 'compact');
+    change('[data-filter="channel"]', 'voice call');
+    q('[data-open]').click();
+    await until(() => q('#audio-block'), 'voice dialog opens');
+    q('[data-action="audio"]').click();
+    await until(() => q('#call-audio'), 'audio player mounts in React slot');
+    assert.match(q('#call-audio').src, /^data:audio\//);
+    q('[data-action="refresh-audio"]').click();
+    await until(() => q('#call-audio'), 'audio refresh retains valid React ownership');
+    q('[data-action="evaluate-dialog"]').click();
+    assert.ok(q('#evaluate-form'));
+    q('[name="confirm"]').click();
+    q('#evaluate-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    await until(() => !q('#job-banner').hidden, 'job progress appears');
+    assert.ok(q('#job-banner progress'));
+    await until(() => q('#job-banner').hidden && q('#evaluation-panel'), 'job completes and React result returns');
+  } finally {
+    uiModule?.disposeUI();
+    window.close();
+    timers.forEach(nativeClearTimeout);
+    for (const [name, descriptor] of saved) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else delete globalThis[name];
+    }
+  }
+});
