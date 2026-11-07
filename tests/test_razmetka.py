@@ -41,7 +41,8 @@ def test_split_sizes_and_strata():
     by_id = {r["conversation_id"]: r for r in recs}
     calls = [c for c in split["holdout"] + split["tune"] if by_id[c]["channel"] == "voice call"]
     assert len(calls) == 5
-    assert sum(by_id[c]["channel"] == "voice call" for c in split["holdout"]) == 2
+    assert sum(by_id[c]["channel"] == "voice call" for c in split["holdout"]) == 0
+    assert [by_id[c]["language"] for c in split["holdout"]].count("RU") == 6
     assert [by_id[c]["language"] for c in split["holdout"]].count("KZ") == 2
 
 
@@ -52,7 +53,7 @@ def test_split_is_reproducible_and_depends_on_seed():
 
 
 def test_split_takes_what_exists_in_small_group():
-    recs = [r for r in fake_records() if r["channel"] == "voice call"][:3]
+    recs = [r for r in fake_records() if r["language"] == "KZ"][:3]
     split = choose_split(recs)
     assert len(split["holdout"]) == 2 and len(split["tune"]) == 1
 

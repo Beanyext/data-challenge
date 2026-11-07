@@ -1,8 +1,11 @@
 """Оценка диалогов из файла.
 
 Примеры (из корня репозитория):
-    python -m app.evaluator.cli --data data/raw/dev.json --ids p1-ru-001 --provider mock
-    python -m app.evaluator.cli --data data/raw/dev.json --limit 5 --provider anthropic
+    python -m app.evaluator.cli --data data/raw/dev.json --ids p1-ru-007 --provider mock
+    python -m app.evaluator.cli --data data/raw/dev.json --ids p1-ru-007 p1-ru-018 p1-kz-002 p1-en-001 p4-ru-001 --provider anthropic
+
+Для подбора запроса брать только настроечные диалоги из reports/gold.json (split.tune).
+--limit берёт первые записи набора, а среди них есть отложенные.
 
 Настройки через переменные окружения или файл .env в корне (он не попадает в git):
     ANTHROPIC_API_KEY  ключ Claude API
