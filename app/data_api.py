@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -57,6 +58,8 @@ def fetch_group(group_id: str, base: str | None = None, timeout: float = 60, att
         raise DataApiError(f"API организаторов не ответило: {last}")
     if not isinstance(doc, dict) or doc.get("isSuccess") is not True:
         err = doc.get("error") if isinstance(doc, dict) else "неизвестный формат"
+        if not isinstance(err, str) or re.search(r"https?://|sk-ant-|\b(?:sig|token|api[_-]?key|authorization|password)\b", err, re.I):
+            raise DataApiError("Сервер вернул ошибку. Подробности с данными доступа скрыты.")
         raise DataApiError(f"API вернуло ошибку: {err}")
     records = (doc.get("data") or {}).get("records")
     if not isinstance(records, list):

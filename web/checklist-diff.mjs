@@ -1,4 +1,5 @@
 const CRITERION_FIELDS = [
+  ['code', 'Код для выгрузки'],
   ['title', 'Название'],
   ['description', 'Правило оценки'],
   ['weight', 'Вес'],
@@ -69,7 +70,7 @@ function criterionTitle(criterion) {
 }
 
 function criterionSummary(criterion) {
-  return CRITERION_FIELDS.map(([field, label]) => `${label}: ${display(field, normalize(field, criterion[field]))}`).join('\n');
+  return CRITERION_FIELDS.map(([field, label]) => `${label}: ${display(field, normalize(field, field === 'code' ? criterion.code ?? criterion.id : criterion[field]))}`).join('\n');
 }
 
 function criteriaById(checklist) {
@@ -100,7 +101,7 @@ export function compareChecklists(before, after) {
       continue;
     }
     for (const [field, label] of CRITERION_FIELDS) {
-      const oldValue = normalize(field, old[field]), newValue = normalize(field, criterion[field]);
+      const oldValue = normalize(field, field === 'code' ? old.code ?? old.id : old[field]), newValue = normalize(field, field === 'code' ? criterion.code ?? criterion.id : criterion[field]);
       if (JSON.stringify(oldValue) !== JSON.stringify(newValue)) {
         changes.push({ kind: 'changed', ...(criterion.id == null ? {} : { criterion_id: String(criterion.id) }), title: criterionTitle(criterion), field, label, before: display(field, oldValue), after: display(field, newValue) });
       }

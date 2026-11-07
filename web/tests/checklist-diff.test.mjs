@@ -166,3 +166,16 @@ test('renderer groups changes with accessible labels and before/after classes', 
   assert.ok(html.includes('<strong>Было</strong>'));
   assert.ok(html.includes('<strong>Станет</strong>'));
 });
+
+
+test('export code-only changes are meaningful while legacy implicit IDs remain unchanged', () => {
+  const before=fixture(),after=clone(before);
+  after.criteria[0].code='c01';
+  assert.equal(compareChecklists(before,after).changed,false);
+  after.criteria[0].code='understanding_v2.test-1';
+  const changes=compareChecklists(before,after).changes;
+  assert.deepEqual(changes.map(change=>[change.field,change.before,change.after]),[['code','c01','understanding_v2.test-1']]);
+  assert.equal(changes[0].label,'Код для выгрузки');
+  const added=clone(after);added.criteria.push({...clone(after.criteria[0]),id:'c09',code:'understanding'});
+  assert.match(compareChecklists(after,added).changes.find(change=>change.kind==='added').after,/Код для выгрузки: understanding/);
+});

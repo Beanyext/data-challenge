@@ -75,7 +75,7 @@ async (originalPage) => {
     check(ok.criteria[3].value === 20 && ok.criteria[5].value === 10, 'Raw scale values lost');
     check(JSON.stringify(ok.criteria[0].evidence_turns) === '[4]', 'Zero-based turn 3 must become 4 including bot/system roles');
     check(ok.score.final_score === 100 && ok.score.critical_flag === false, 'Unexpected score');
-    check(ok.criteria[0].rationale.includes('«кириллица» & <script>'), 'Cyrillic/special characters damaged');
+    check(ok.criteria[0].rationale.includes('«…» & <script>'), 'Quoted spans must be scrubbed while special characters stay intact');
     check(!JSON.stringify(document).includes('Цитата не должна'), 'Raw quote leaked');
     check(!JSON.stringify(document).includes('audio_url') && !JSON.stringify(document).includes('transcript'), 'Source fields leaked');
   }
@@ -230,13 +230,39 @@ async (originalPage) => {
       check(document.results.length === 10 && document.team_name === 'seeusoon', 'Privacy warning changed completeness or team');
     });
 
+    await scenario('quoted source text is scrubbed and verbatim public rationales are blocked in RU/KK/EN', async () => {
+      for (const passage of [
+        'Это вымышленная секретная реплика клиента для проверки защиты',
+        'Бұл қорғанысты тексеруге арналған клиенттің ойдан шығарылған құпия сөзі',
+        'This fictional private client passage tests safe public result exports',
+      ]) {
+        await open();const input=fixture();input.records[0].transcript[3].text=passage;
+        input.evaluations[0].criteria[0].explanation=`Проверено действие: «${passage}». Основание доступно в интерфейсе.`;
+        await upload(input);await prepare();await expectedSuccess();
+        const exported=await download(),criterion=exported.results[0].criteria[0];
+        check(!JSON.stringify(exported).includes(passage),'Raw transcript quote leaked into a public download');
+        check(criterion.rationale.includes('«…»') && criterion.value===true && JSON.stringify(criterion.evidence_turns)==='[4]','Quote scrub changed the answer or proof indices');
+        input.evaluations[0].criteria[0].explanation=`Основание: ${passage}.`;
+        await page.locator('#submission-evaluation-files').setInputFiles(file('оценки-с-цитатой.json',{evaluations:input.evaluations}));
+        await expectBlocked(/перескажите/);
+        check(!(await page.locator('#submission-result').innerText()).includes(passage),'Privacy error echoed the transcript');
+      }
+    });
+
     await scenario('reviewed originals require original snapshot; explicit final source works', async () => {
-      await open(); const input = fixture(); input.evaluations[0].criteria[0].original_answer = 'yes'; input.evaluations[0].criteria[0].answer = 'no'; input.evaluations[0].criteria[0].review_reason = 'Synthetic human review.'; input.evaluations[0].total = 90; input.evaluations[0].original_total = 100;
+      await open(); const input = fixture(), originalCriteria=clone(input.evaluations[0].criteria); input.evaluations[0].criteria[0].original_answer = 'yes'; input.evaluations[0].criteria[0].answer = 'no'; input.evaluations[0].criteria[0].review_reason = 'Synthetic human review.'; input.evaluations[0].total = 90; input.evaluations[0].original_total = 100;
       await upload(input); await expectBlocked(/original_criteria/);
       await page.locator('#submission-form select[name=source]').selectOption('final');
       await prepare(); await expectedSuccess(); await page.locator('#submission-acknowledge').check();
       const document = await download();
       check(document.results[0].criteria[0].value === false && document.results[0].score.final_score === 90, 'Explicit final answer/score not used');
+      check(document.results[0].criteria[0].rationale === 'Synthetic human review.', 'Final export lost the reviewer reason or reused the original model rationale');
+      input.evaluations[0].original_criteria=originalCriteria;
+      await page.locator('#submission-evaluation-files').setInputFiles(file('оценки-с-исходным-снимком.json',{evaluations:input.evaluations}));
+      await page.locator('#submission-form select[name=source]').selectOption('original');
+      await prepare();await expectedSuccess();
+      const originalDocument=await download();checkDocument(originalDocument,10);
+      check(originalDocument.results[0].criteria[0].rationale === originalCriteria[0].explanation.replace('«кириллица»','«…»'), 'Original export was overwritten by the reviewer reason');
     });
 
     await scenario('DEV exports all 65 originals including five calls; responsive export layout', async () => {

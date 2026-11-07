@@ -371,3 +371,78 @@ test('builder and validator do not mutate inputs', () => {
   assert.deepEqual(input, before);
   assert.deepEqual(built.document, outputBefore);
 });
+
+
+test('final export uses the reviewer rationale while original export preserves the model explanation',()=>{
+  const input=fixture(),evaluation=input.entries[0].evaluation,item=evaluation.criteria[0];
+  evaluation.original_criteria=clone(evaluation.criteria);
+  evaluation.original_total=100;evaluation.total=90;
+  item.answer='no';item.review_reason='Проверяющий: действие отсутствовало.';
+  item.decision={status:'changed',answer:'no',reason:'Проверяющий: действие отсутствовало.'};
+  const original=buildSubmission(input),final=buildSubmission({...input,source:'final'});
+  assert.deepEqual(original.errors,[]);assert.deepEqual(final.errors,[]);
+  assert.equal(original.document.results[0].criteria[0].rationale,evaluation.original_criteria[0].explanation);
+  assert.equal(final.document.results[0].criteria[0].rationale,item.decision.reason);
+  assert.equal(final.document.results[0].criteria[0].value,false);
+});
+
+test('resolved server validation problems require an explicit matching decision and keep proof validation strict',()=>{
+  const input=fixture(),evaluation=input.entries[0].evaluation,item=evaluation.criteria[0];
+  item.problems=['Исходный ответ модели требовал проверки.'];
+  item.needs_review=true;
+  evaluation.original_criteria=clone(evaluation.criteria);
+  evaluation.original_total=100;evaluation.total=90;item.answer='no';
+  item.decision={status:'changed',answer:'no',reason:'Проверено вручную по вымышленному диалогу.'};
+  item.review_reason=item.decision.reason;
+  assert.equal(buildSubmission({...input,source:'final'}).document,null);
+  item.needs_review=false;
+  const final=buildSubmission({...input,source:'final'});
+  assert.deepEqual(final.errors,[]);assert.equal(final.document.results[0].criteria[0].rationale,item.decision.reason);
+  assert.equal(buildSubmission(input).document,null,'unresolved original model result stays blocked');
+  const resolved=clone(item);
+  for(const mutate of [i=>{i.decision=null;},i=>{i.decision.answer='yes';},i=>{i.decision.reason='';},i=>{i.decision.status='open';},i=>{i.evidence=[{turn:999}];},i=>{i.answer='not-an-answer';}]){
+    Object.assign(item,clone(resolved));mutate(item);assert.equal(buildSubmission({...input,source:'final'}).document,null);
+  }
+});
+
+for (const [language, passage] of [
+  ['RU', 'Это вымышленная секретная реплика клиента для проверки защиты'],
+  ['KK', 'Бұл қорғанысты тексеруге арналған клиенттің ойдан шығарылған құпия сөзі'],
+  ['EN', 'This fictional private client passage tests safe public result exports'],
+]) {
+  test(`${language} quoted transcript text is scrubbed and verbatim unquoted text blocks public export`,()=>{
+    const input=fixture();input.expectedDialogs[0].transcript[3].text=passage;input.entries[0].dialog=clone(input.expectedDialogs[0]);
+    const item=input.entries[0].evaluation.criteria[0];
+    item.explanation=`Обоснование: «${passage}». Выполнение действия проверено по реплике.`;
+    const before=clone(input),quoted=buildSubmission(input);
+    assert.deepEqual(quoted.errors,[]);assert.ok(quoted.document);
+    assert.ok(!JSON.stringify(quoted.document).includes(passage));
+    assert.match(quoted.document.results[0].criteria[0].rationale,/«…»/);
+    assert.equal(quoted.document.results[0].criteria[0].value,true);
+    assert.deepEqual(quoted.document.results[0].criteria[0].evidence_turns,[4]);
+    assert.deepEqual(input,before);
+    item.explanation=`Обоснование: ${passage}.`;
+    const unquoted=buildSubmission(input);
+    assert.equal(unquoted.document,null);assert.ok(unquoted.errors.some(error=>error.includes('перескажите')));
+    assert.ok(!JSON.stringify(unquoted.errors).includes(passage));
+    const malicious=clone(quoted.document);malicious.results[0].criteria[0].rationale=`Обоснование: ${passage}.`;
+    const invalidBefore=clone(malicious),checked=validateSubmission(malicious,input);
+    assert.equal(checked.valid,false);assert.deepEqual(malicious,invalidBefore);
+    assert.ok(!JSON.stringify(checked.errors).includes(passage));
+    malicious.results[0].criteria[0].rationale=`Подтверждено: «${passage.split(' ').slice(0,3).join(' ')}».`;
+    assert.equal(validateSubmission(malicious,input).valid,false,'explicit short transcript quotation is still private');
+    item.explanation=`${passage.split(' ')[0]} — отдельное слово без дословного фрагмента.`;
+    assert.deepEqual(buildSubmission(input).errors,[],'an isolated unquoted word is not a transcript passage');
+  });
+}
+
+test('quote-only rationale and copied transcript error text cannot become a public result',()=>{
+  const input=fixture(),passage='Fictional transcript statement with six private words for export checks';
+  input.expectedDialogs[0].transcript[3].text=passage;input.entries[0].dialog=clone(input.expectedDialogs[0]);
+  input.entries[0].evaluation.criteria[0].explanation=`«${passage}»`;
+  assert.equal(buildSubmission(input).document,null,'removing the quote must not invent an explanation');
+  input.entries[0]={dialog:input.entries[0].dialog,error:`Ошибка: ${passage}`};
+  const failed=buildSubmission(input);assert.equal(failed.document,null);
+  const {doc}=document();doc.results[0]={conversation_id:input.expectedDialogs[0].conversation_id,status:'error',criteria:[],score:null,error:`Ошибка: ${passage}`};
+  assert.equal(validateSubmission(doc,input).valid,false);
+});

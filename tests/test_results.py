@@ -186,3 +186,37 @@ def test_cli_build_and_check(tmp_path, monkeypatch, capsys):
     (evals / "b.json").write_text(json.dumps(evaluation("b", provider="mock")), encoding="utf-8")
     assert results_main(["build", *args, "--evals", str(evals), "--out", str(tmp_path / "x.json"), "--team", "К"]) == 1
     assert not (tmp_path / "x.json").exists()
+
+
+@pytest.mark.parametrize('flags', [
+    {'needs_review': True},
+    {'problems': ['synthetic invalid evidence']},
+    {'needs_review': True, 'problems': ['synthetic empty explanation']},
+])
+def test_unresolved_validation_is_explicit_error_not_success(flags):
+    ev = evaluation()
+    ev['criteria'][0].update(flags)
+    doc, report = build_results([record()], {'demo-001': ev}, CHECKLIST, 'Synthetic team')
+    row = doc['results'][0]
+    assert row['conversation_id'] == 'demo-001'
+    assert row['status'] == 'error' and row['criteria'] == [] and row['score'] is None
+    assert 'c01' in row['error']
+    assert report['ok'] == 0 and report['errors'] == ['demo-001']
+    assert check_results(doc, [record()], CHECKLIST, expected=1) == []
+
+
+def test_cli_keeps_unresolved_validation_id_and_successful_neighbor(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    data = tmp_path / 'synthetic.json'
+    data.write_text(json.dumps([record('a'), record('b')]), encoding='utf-8')
+    evs = tmp_path / 'evals'
+    evs.mkdir()
+    invalid = evaluation('b')
+    invalid['criteria'][0].update(needs_review=True, problems=['synthetic unresolved evidence'])
+    for ev in (evaluation('a'), invalid):
+        (evs / f"{ev['conversation_id']}.json").write_text(json.dumps(ev), encoding='utf-8')
+    out = tmp_path / 'results.json'
+    assert results_main(['build', '--data', str(data), '--evals', str(evs), '--checklist', str(ROOT / 'app/checklists/freedom_chat_v1.json'), '--team', 'Synthetic team', '--expect', '2', '--out', str(out)]) == 0
+    rows = json.loads(out.read_text())['results']
+    assert [(row['conversation_id'], row['status']) for row in rows] == [('a', 'ok'), ('b', 'error')]
+    assert rows[1]['score'] is None and rows[1]['criteria'] == []

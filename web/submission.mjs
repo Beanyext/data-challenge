@@ -47,6 +47,32 @@ function cleanText(value, context, errors, warnings, redact = false) {
   return text;
 }
 
+// Match the public Python exporter: quoted spans are removed; six consecutive
+// source words are enough to identify an unquoted transcript passage.
+const QUOTED_TEXT = /«[^»]*»|“[^”]*”|„[^“”]*[“”]|"[^"]*"/gu;
+const QUOTE_WORDS = 6;
+const textWords = value => String(value ?? '').toLowerCase().replace(/ё/g, 'е').match(/[\p{L}\p{N}_]+/gu) || [];
+const phraseKey = words => words.join('\u0000');
+function transcriptPrivacy(transcript) {
+  const turns = (Array.isArray(transcript) ? transcript : []).map(turn => textWords(turn?.text));
+  const grams = new Set();
+  for (const words of turns) for (let i = 0; i + QUOTE_WORDS <= words.length; i++) grams.add(phraseKey(words.slice(i, i + QUOTE_WORDS)));
+  return { turns, grams };
+}
+function publicText(text, privacy, context, errors, stripQuotes = false) {
+  const output = stripQuotes ? text.replace(QUOTED_TEXT, '«…»') : text;
+  const words = textWords(output);
+  let leaked = stripQuotes && !words.length;
+  for (let i = 0; i + QUOTE_WORDS <= words.length && !leaked; i++) leaked = privacy.grams.has(phraseKey(words.slice(i, i + QUOTE_WORDS)));
+  // Directly validated JSON also rejects explicit short source quotations.
+  if (!stripQuotes) for (const match of output.matchAll(QUOTED_TEXT)) {
+    const quoted = textWords(match[0]);
+    if (quoted.length && privacy.turns.some(turn => turn.some((_, i) => i + quoted.length <= turn.length && phraseKey(turn.slice(i, i + quoted.length)) === phraseKey(quoted)))) leaked = true;
+  }
+  if (leaked) errors.push(`${context}: текст содержит дословный фрагмент транскрипта или только цитату. Уберите цитаты и перескажите текст своими словами.`);
+  return output;
+}
+
 function exactKeys(value, keys, context, errors) {
   if (!object(value)) { errors.push(`${context}: ожидается объект.`); return false; }
   const allowed = new Set(keys);
@@ -221,9 +247,10 @@ export function buildSubmission(options = {}) {
     const evaluation = entry?.evaluation;
     if (object(evaluation) && (evaluation.demo === true || evaluation.is_demo === true || evaluation.mock === true || DEMO_NAME.test(String(evaluation.provider || '')) || [evaluation.model,...(Array.isArray(evaluation.calls)?evaluation.calls.map(call=>call?.model):[])].some(name=>DEMO_NAME.test(String(name || ''))))) { errors.push(`${context}: mock/demo-оценка запрещена для сдачи.`); return; }
     const row = { conversation_id: original.conversation_id };
+    const privacy = transcriptPrivacy(original.transcript);
     if (own(entry, 'error')) {
       const value = entry.error instanceof Error ? entry.error.message : entry.error;
-      const message = cleanText(value, `${context}, ошибка`, errors, warnings, true);
+      const message = publicText(cleanText(value, `${context}, ошибка`, errors, warnings, true), privacy, `${context}, ошибка`, errors, true);
       results.push({ ...row, status: 'error', criteria: [], score: null, error: message });
       return;
     }
@@ -241,17 +268,21 @@ export function buildSubmission(options = {}) {
       if (!criterion || seen.has(criterion.id)) { errors.push(`${context}: неизвестный или повторный критерий.`); continue; }
       seen.add(criterion.id);
       const where = `${context}, ${criterion.id}`;
-      if (item.needs_review === true || Array.isArray(item.problems) && item.problems.length) errors.push(`${where}: ответ требует проверки и не готов к сдаче.`);
+      const resolvedReview = source === 'final' && object(item.decision) && ['confirmed', 'changed'].includes(item.decision.status) && item.decision.answer === item.answer && nonempty(item.decision.reason) && item.needs_review !== true;
+      if (item.needs_review === true || Array.isArray(item.problems) && item.problems.length && !resolvedReview) errors.push(`${where}: ответ требует проверки и не готов к сдаче.`);
       let value = own(item, 'answer') ? item.answer : item.value;
       if (value === 'yes') value = true;
       else if (value === 'no') value = false;
       else if (value === 'na') value = null;
       validateValue(value, criterion, where, errors);
-      let rationale = cleanText(own(item, 'explanation') ? item.explanation : item.rationale, `${where}, обоснование`, errors, warnings, true);
-      if (value === null && nonempty(item.na_reason)) {
+      const reviewRationale = source === 'final' && (object(item.decision) || nonempty(item.review_reason));
+      const explanation = reviewRationale ? item.decision?.reason ?? item.review_reason : own(item, 'explanation') ? item.explanation : item.rationale;
+      let rationale = cleanText(explanation, `${where}, обоснование`, errors, warnings, true);
+      if (value === null && !reviewRationale && nonempty(item.na_reason)) {
         const reason = cleanText(item.na_reason, `${where}, причина N/A`, errors, warnings, true);
         if (reason && !rationale.includes(reason)) rationale += ` N/A: ${reason}`;
       }
+      rationale = publicText(rationale, privacy, `${where}, обоснование`, errors, true);
       const evidence = evidenceTurns(item, Array.isArray(original.transcript) ? original.transcript.length : 0, where, errors);
       if (!evidence.length) warnings.push(`${where}: нет ссылок на реплики.`);
       criteria.push({ criterion_id: criterion.id, value, rationale, evidence_turns: evidence });
@@ -300,11 +331,12 @@ export function validateSubmission(document, { dataset, expectedDialogs } = {}) 
     if (seen.has(row.conversation_id)) errors.push(`${context}: ID повторяется.`);
     seen.add(row.conversation_id);
     const dialog = expected.get(row.conversation_id);
+    const privacy = transcriptPrivacy(dialog?.transcript);
     if (!['ok', 'error'].includes(row.status)) { errors.push(`${context}: status должен быть ok или error.`); return; }
     if (row.status === 'error') {
       exactKeys(row, ['conversation_id', 'status', 'criteria', 'score', 'error'], context, errors);
       if (!Array.isArray(row.criteria) || row.criteria.length !== 0 || row.score !== null) errors.push(`${context}: при error нужны criteria: [] и score: null.`);
-      cleanText(row.error, `${context}, ошибка`, errors, warnings);
+      publicText(cleanText(row.error, `${context}, ошибка`, errors, warnings), privacy, `${context}, ошибка`, errors);
       warnPersonalText(row.error, `${context}, ошибка`, warnings);
       return;
     }
@@ -317,7 +349,7 @@ export function validateSubmission(document, { dataset, expectedDialogs } = {}) 
       if (!criterion || ids.has(item.criterion_id)) { errors.push(`${context}: неизвестный или повторный канонический criterion_id.`); continue; }
       ids.add(criterion.id);
       if (validateValue(item.value, criterion, `${context}, ${criterion.id}`, errors)) validCriteria.push(item);
-      cleanText(item.rationale, `${context}, ${criterion.id}, обоснование`, errors, warnings);
+      publicText(cleanText(item.rationale, `${context}, ${criterion.id}, обоснование`, errors, warnings), privacy, `${context}, ${criterion.id}, обоснование`, errors);
       warnPersonalText(item.rationale, `${context}, ${criterion.id}`, warnings);
       if (!Array.isArray(item.evidence_turns)) errors.push(`${context}, ${criterion.id}: evidence_turns должен быть массивом.`);
       else {

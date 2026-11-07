@@ -24,9 +24,12 @@ export function validateEditor(checklist: Checklist): string[] {
   const sectionIds=new Set(checklist.sections.map(section=>section.id));
   if(!checklist.sections.length || sectionIds.size!==checklist.sections.length || checklist.sections.some(section=>!section.id.trim() || !section.name?.trim())) errors.push('Разделы должны иметь уникальные ID и непустые названия.');
   if(new Set(checklist.criteria.map(criterion=>criterion.id)).size!==checklist.criteria.length || checklist.criteria.some(criterion=>!criterion.id.trim())) errors.push('Идентификаторы критериев должны быть непустыми и уникальными.');
+  const codes=checklist.criteria.map(criterion=>criterion.code ?? criterion.id);
+  if(new Set(codes).size!==codes.length)errors.push('Коды для выгрузки должны быть уникальными.');
   if(!Number.isInteger(checklist.rounding?.digits ?? 2) || (checklist.rounding?.digits ?? 2)<0 || (checklist.rounding?.digits ?? 2)>4)errors.push('Укажите от 0 до 4 знаков после запятой.');
   for(const criterion of checklist.criteria) {
     const prefix=`${criterion.id}: `;
+    if(!/^[A-Za-z0-9_.-]{1,64}$/.test(criterion.code ?? criterion.id))errors.push(prefix+'Код для выгрузки: от 1 до 64 латинских букв, цифр, точек, дефисов или подчёркиваний.');
     if(!criterion.title.trim() || !criterion.description.trim())errors.push(prefix+'Нужны название и правило оценки.');
     if(!Number.isFinite(criterion.weight) || criterion.weight<0 || criterion.weight>100)errors.push(prefix+'Вес должен быть от 0 до 100.');
     if(!['binary','scale'].includes(criterion.answer_type))errors.push(prefix+'Неизвестный тип ответа.');
@@ -89,7 +92,7 @@ export function ChecklistWorkspace({active,api,checklists,onSaved,notify,onDirty
       criterion.gross_error=Boolean(value);
       if(value){criterion.weight=0;criterion.answer_type='binary';criterion.scale=null;criterion.na_allowed=false;criterion.na_rule=null;delete criterion._stepsText;}
     } else if(field==='na_allowed') {criterion.na_allowed=Boolean(value);if(!value)criterion.na_rule=null;}
-    else if(['title','description','section_id','na_rule','notes'].includes(field))(criterion as unknown as Record<string,unknown>)[field]=String(value);
+    else if(['code','title','description','section_id','na_rule','notes'].includes(field))(criterion as unknown as Record<string,unknown>)[field]=String(value);
     update(next);
   }
   function selectChecklist(value:string) {
@@ -103,10 +106,10 @@ export function ChecklistWorkspace({active,api,checklists,onSaved,notify,onDirty
     setEditor(freshChecklist());setBase(null);setCriterionIndex(0);setDirty(true);setErrors([]);setSectionText(null);
   }
   function addCriterion() {
-    const next=copy(editor || freshChecklist()),ids=new Set(next.criteria.map(criterion=>criterion.id));
+    const next=copy(editor || freshChecklist()),ids=new Set(next.criteria.flatMap(criterion=>[criterion.id,criterion.code ?? criterion.id]));
     let index=next.criteria.length+1;while(ids.has(`c${String(index).padStart(2,'0')}`))index++;
     if(!next.sections.length)next.sections=[{id:'s1',name:t('Общие критерии')}];
-    next.criteria.push({id:`c${String(index).padStart(2,'0')}`,section_id:next.sections[0].id,title:t('Новый критерий'),description:'',answer_type:'binary',scale:null,weight:10,na_allowed:false,na_rule:null,notes:null,gross_error:false});
+    next.criteria.push({id:`c${String(index).padStart(2,'0')}`,code:`c${String(index).padStart(2,'0')}`,section_id:next.sections[0].id,title:t('Новый критерий'),description:'',answer_type:'binary',scale:null,weight:10,na_allowed:false,na_rule:null,notes:null,gross_error:false});
     setCriterionIndex(next.criteria.length-1);update(next);
   }
   function removeCriterion() {
@@ -146,6 +149,7 @@ export function ChecklistWorkspace({active,api,checklists,onSaved,notify,onDirty
       <section className="panel checklist-configuration"><div className="panel-body"><label>{t('Название чек-листа')}<input data-edit="name" value={cl.name} required maxLength={160} onChange={event=>update({...cl,name:event.target.value})}/></label>
         <details className="checklist-general"><summary>{t('Общие правила и разделы')}</summary><div className="field-grid"><label className="full">{t('Общие правила')}<textarea data-edit="guidance" value={(cl.guidance||[]).join('\n')} onChange={event=>update({...cl,guidance:event.target.value.split('\n')})}/><span className="muted small">{t('Одна инструкция на строку.')}</span></label><label className="full">{t('Разделы чек-листа')}<textarea data-edit="sections" value={sectionsValue} onChange={event=>{setSectionText(event.target.value);update({...cl,sections:event.target.value.split('\n').filter(line=>line.trim()).map(line=>{const [id,...name]=line.split('|');return {id:id.trim(),name:name.join('|').trim()};})});}}/><span className="muted small">{t('Одна строка: ID | название. ID используются в критериях.')}</span></label><label>{t('Знаков после запятой')}<input type="number" min="0" max="4" step="1" data-edit="digits" value={Number.isFinite(cl.rounding?.digits??2)?cl.rounding?.digits??2:''} onChange={event=>update({...cl,rounding:{digits:event.target.value.trim()?Number(event.target.value):Number.NaN}})}/></label></div></details>
         {c?<div className="criterion-editor" key={c.id}><div className="editor-title-row"><div><span className="editor-eyebrow">{c.id}</span><h2>{t('Настройка критерия')}</h2></div><button type="button" className="btn btn-small btn-ghost danger" data-action="remove-criterion" onClick={removeCriterion}>{t('Удалить критерий')}</button></div><div className="field-grid">
+          <label className="full">{t('Код для выгрузки')}<input data-criterion="code" value={c.code ?? c.id} required maxLength={64} spellCheck={false} autoComplete="off" onChange={event=>changeCriterion('code',event.target.value)}/><span className="muted small">{t('Код критерия в файле результатов. Латинские буквы, цифры, точка, дефис или подчёркивание; код не должен повторяться.')}</span></label>
           <label className="full">{t('Название критерия')}<input data-criterion="title" value={c.title} required maxLength={200} onChange={event=>changeCriterion('title',event.target.value)}/></label>
           <label className="full">{t('Что считается выполнением')}<textarea data-criterion="description" value={c.description} required onChange={event=>changeCriterion('description',event.target.value)}/></label>
           <label>{t('Тип ответа')}<select data-criterion="answer_type" value={c.answer_type} disabled={Boolean(c.gross_error)} onChange={event=>changeCriterion('answer_type',event.target.value)}><option value="binary">{t('Да / Нет')}</option><option value="scale">{t('Числовая шкала')}</option></select></label>
@@ -172,7 +176,7 @@ function formattedScale(value:string):string {
 function criterionSummary(criterion:Criterion):string {
   const scale=criterion.scale;
   const values:[string,string][]=[
-    ['Название',criterion.title],['Правило оценки',criterion.description],['Вес',number(criterion.weight)],
+    ['Код для выгрузки',criterion.code ?? criterion.id],['Название',criterion.title],['Правило оценки',criterion.description],['Вес',number(criterion.weight)],
     ['Тип ответа',t(criterion.answer_type==='scale'?'Числовая шкала':'Да / Нет')],
     ['Шкала',scale?[t('От {min} до {max}',{min:number(scale.min),max:number(scale.max)}),...scale.steps.map(step=>`${number(step.value)} | ${step.label}`)].join('\n'):'—'],
     ['Допустимость N/A',t(criterion.na_allowed?'Да':'Нет')],['Условие N/A',criterion.na_rule||'—'],

@@ -1,0 +1,81 @@
+async (originalPage) => {
+  const origin='http://127.0.0.1:8767';
+  const context=await originalPage.context().browser().newContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'});
+  const page=await context.newPage(),errors=[],passed=[];
+  const check=(value,message)=>{if(!value)throw new Error(message);};
+  page.on('pageerror',error=>errors.push(error.message));
+  await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
+  try {
+    const health=await page.request.get(`${origin}/api/health`);
+    check((await health.json()).provider==='mock','Requires isolated mock server, no model requests allowed');
+    const id='synthetic-recovery';
+    const before=await (await page.request.get(`${origin}/api/dialogs/${id}`)).json();
+    check(before.evaluation_id==='synthetic-recovery-eval','Requires seeded synthetic missing-answer fixture');
+    await page.goto(`${origin}/#dialog/${id}`);
+    await page.locator('#criterion-c01 .result-row').click();
+    await page.locator('#criterion-c01 [data-appeal=c01]').click();
+    await page.locator('#appeal-form textarea').fill('Вымышленная проверка отсутствующего ответа «ҚАЗ» & <тест>.');
+    await page.locator('#appeal-form button[type=submit]').click();
+    await page.locator('#modal').waitFor({state:'detached'});
+    await page.locator('[data-nav=appeals]').click();
+    const appeals=await (await page.request.get(`${origin}/api/appeals`)).json();
+    const appeal=appeals.find(item=>item.conversation_id===id&&item.status==='open');
+    check(appeal,'Missing-answer appeal was not stored');
+    await page.locator(`[data-review="${appeal.id}"]`).click();
+    const form=page.locator(`[data-decision="${appeal.id}"]`);
+    await form.waitFor();
+    check(await form.locator('[value=confirmed]').isDisabled(),'Cannot confirm a missing answer');
+    check(await form.locator('select[name=answer]').inputValue()==='','No answer may be invented');
+    await form.locator('textarea[name=reason]').fill('Вымышленное решение: контакт установлен. ҚАЗ & <тест>.');
+    const sent=[];page.on('request',request=>{if(request.url().endsWith('/decision'))sent.push(request);});
+    await form.locator('button[type=submit]').click();
+    check(sent.length===0,'Empty answer was submitted');
+    await form.locator('select[name=answer]').selectOption('yes');
+    const decision=page.waitForResponse(response=>response.url().endsWith(`/appeals/${appeal.id}/decision`)&&response.request().method()==='POST');
+    await form.locator('button[type=submit]').click();
+    check((await decision).ok(),'Reviewer decision failed');
+    await page.goto(`${origin}/#dialog/${id}`);await page.locator('#evaluation-panel').waitFor();
+    await page.reload();await page.locator('#evaluation-panel').waitFor();
+    const repaired=await (await page.request.get(`${origin}/api/evaluations/${before.evaluation_id}`)).json();
+    const item=repaired.criteria.find(item=>item.criterion_id==='c01');
+    check(item.answer==='yes'&&item.needs_review===false&&repaired.total===100,'Human correction did not persist');
+    check(item.decision.reason.includes('ҚАЗ & <тест>'),'User reason was changed');
+    check(repaired.original_criteria.find(item=>item.criterion_id==='c01').answer===null,'Original missing answer was overwritten');
+    passed.push('missing model answer → explicit human answer/reason → real SQLite persistence, original intact');
+
+    await page.locator('[data-nav=checklists]').click();
+    await page.locator('[data-criterion=code]').waitFor();
+    await page.locator('[data-criterion=code]').fill('synthetic_contact');
+    await page.locator('[data-action=save-checklist]').click();
+    await page.getByRole('button',{name:'Сохранить новую версию',exact:true}).click();
+    await page.locator('#modal').waitFor({state:'detached'});
+    let checklist=(await (await page.request.get(`${origin}/api/checklists`)).json()).find(item=>item.id==='freedom-chat');
+    check(checklist.criteria[0].code==='synthetic_contact','Code-only save was dropped');
+    await page.locator('[data-action=add-criterion]').click();
+    await page.locator('[data-criterion=code]').fill('understanding');
+    await page.locator('[data-criterion=title]').fill('Вымышленное понимание «ҚАЗ» & <тест>');
+    await page.locator('[data-criterion=description]').fill('Вымышленное правило: оператор понял запрос «Сұрақ».');
+    await page.locator('[data-action=save-checklist]').click();
+    await page.getByRole('button',{name:'Сохранить новую версию',exact:true}).click();
+    await page.locator('#modal').waitFor({state:'detached'});
+    checklist=(await (await page.request.get(`${origin}/api/checklists`)).json()).find(item=>item.id==='freedom-chat');
+    check(checklist.criteria.some(item=>item.code==='understanding'&&item.title.includes('ҚАЗ')),'New criterion code/content not stored');
+    const evaluation=await page.request.post(`${origin}/api/evaluations`,{data:{conversation_ids:[id],checklist_id:checklist.id}});
+    const job=await evaluation.json();
+    let result;
+    for(let attempt=0;attempt<100;attempt++){
+      result=await (await page.request.get(`${origin}/api/jobs/${job.id}`)).json();
+      if(['completed','failed'].includes(result.status))break;
+      await page.waitForTimeout(50);
+    }
+    check(result.status==='completed'&&result.failed===0,'Changed checklist mock evaluation failed');
+    const fresh=await (await page.request.get(`${origin}/api/evaluations/${job.evaluation_ids[0]}`)).json();
+    check(fresh.criteria.some(item=>item.code==='understanding'),'New criterion did not reach the evaluator');
+    check(fresh.checklist_version===checklist.version,'Wrong checklist version used');
+    const historical=await (await page.request.get(`${origin}/api/evaluations/${before.evaluation_id}`)).json();
+    check(historical.checklist.version<checklist.version&&historical.criteria.length===8,'Historical checklist was overwritten');
+    passed.push('code-only UI save + new criterion understanding → new version → mock evaluation; historical version intact');
+    check(errors.length===0,JSON.stringify(errors));
+    return {passed,pageErrors:errors,paidCalls:0,realFastApi:true,realSQLite:true};
+  } finally {await context.close();}
+}

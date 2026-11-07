@@ -50,7 +50,7 @@ def recording_event(text: str) -> str | None:
 def turn_offsets(transcript: list[dict]) -> dict[str, float]:
     """Секунды от начала записи для каждой реплики. Пусто, если время не ISO 8601 (чаты)."""
     times = [_parse(t.get("timestamp")) for t in transcript]
-    if not times or any(t is None for t in times):
+    if not times or any(t is None for t in times) or len({t.tzinfo is None for t in times}) > 1:
         return {}
     events = [(times[i], recording_event(t.get("text"))) for i, t in enumerate(transcript) if t.get("speaker") == "system"]
     start = next((ts for ts, kind in events if kind == "start"), times[0])

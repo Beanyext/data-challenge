@@ -1,4 +1,8 @@
 export const submissionMessages: Record<string, { en: string; kk: string }> = {
+  'текст содержит дословный фрагмент транскрипта или только цитату. Уберите цитаты и перескажите текст своими словами.': {
+    en: 'text contains a verbatim transcript passage or only a quotation. Remove quotations and paraphrase the text in your own words.',
+    kk: 'мәтінде транскрипттен сөзбе-сөз алынған үзінді немесе тек дәйексөз бар. Дәйексөздерді алып тастап, мәтінді өз сөзіңізбен жазыңыз.'
+  },
   "Выгрузка результатов": {
     "en": "Results export",
     "kk": "Нәтижелерді экспорттау"

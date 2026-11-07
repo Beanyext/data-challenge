@@ -11,10 +11,12 @@ async (originalPage) => {
   });
   try {
     await page.goto('http://127.0.0.1:8765/#dialog/qa-security');
+    await page.locator('#criterion-c1 .result-row').click();
     await page.getByText('Некорректный диапазон доказательства', { exact: true }).waitFor();
     if (await page.locator('.evidence-links img').count() || await page.evaluate(() => window.__rangeUnsafe)) throw new Error('Range XSS');
     validRange = true;
     await page.reload();
+    await page.locator('#criterion-c1 .result-row').click();
     await page.locator('[data-turn="0"][data-range-end="0"]').click();
     if (await page.locator('.turn.highlight').count() !== 1) throw new Error('Control: valid range must still navigate');
     await page.getByText('Сервер передал некорректный адрес аудио.', { exact: true }).waitFor();

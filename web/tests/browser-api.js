@@ -130,10 +130,14 @@ async (originalPage) => {
 
     await page.getByRole('link', { name: /Диалоги/ }).click();
     await page.getByRole('button', { name: 'Открыть api-qa-001', exact: true }).click();
+    await page.locator('#criterion-c01 .result-row').click();
     await page.locator('#criterion-c01 [data-appeal]').click();
     const comment = 'Учебное обращение «API» & <script>window.__apiUnsafe=1</script>';
     await page.getByRole('textbox', { name: 'Почему вы не согласны' }).fill(comment);
     await page.getByRole('button', { name: 'Подать апелляцию', exact: true }).click();
+    await page.locator('#modal').waitFor({state:'detached'});
+    await page.waitForFunction(()=>document.querySelector('#criterion-c01 [data-appeal]')?.textContent.includes('Апелляция подана'));
+    if(await page.locator('#criterion-c01 .result-row').getAttribute('aria-expanded')!=='true')await page.locator('#criterion-c01 .result-row').click();
     await page.locator('#criterion-c01').getByRole('button', { name: 'Апелляция подана' }).waitFor();
     await page.getByRole('link', { name: /Апелляции/ }).click();
     await page.getByText(comment, { exact: true }).waitFor();
@@ -205,10 +209,14 @@ async (originalPage) => {
     await page.getByRole('link',{name:/Диалоги/}).click();
     await page.getByRole('button',{name:'Открыть api-qa-001',exact:true}).click();
     await page.getByText('Исходная версия чек-листа недоступна. Правила другой версии не подставляются. Для пересмотра нужен исходный чек-лист.',{exact:true}).waitFor();
-    check((await page.locator('#criterion-c01 h3').innerText())==='c01','Missing snapshot never uses a newer criterion title');
+    check((await page.locator('#criterion-c01 .result-row-title').innerText())==='c01','Missing snapshot never uses a newer criterion title');
+    await page.locator('#criterion-c01 .result-row').click();
     await page.locator('#criterion-c01 [data-appeal]').click();
     await page.getByRole('textbox',{name:'Почему вы не согласны'}).fill('Проверка отсутствующей исходной версии.');
     await page.getByRole('button',{name:'Подать апелляцию',exact:true}).click();
+    await page.locator('#modal').waitFor({state:'detached'});
+    await page.waitForFunction(()=>document.querySelector('#criterion-c01 [data-appeal]')?.textContent.includes('Апелляция подана'));
+    if(await page.locator('#criterion-c01 .result-row').getAttribute('aria-expanded')!=='true')await page.locator('#criterion-c01 .result-row').click();
     await page.locator('#criterion-c01').getByRole('button',{name:'Апелляция подана'}).waitFor();
     await page.getByRole('link',{name:/Апелляции/}).click();
     await page.getByRole('button',{name:'Рассмотреть',exact:true}).click();

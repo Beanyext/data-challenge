@@ -1,5 +1,9 @@
 // Interface copy only. Checklist content, evidence and review comments stay in their original language.
 export const formsMessages: Record<string, { en: string; kk: string }> = {
+  'Код для выгрузки': { en: 'Export code', kk: 'Экспорт коды' },
+  'Код критерия в файле результатов. Латинские буквы, цифры, точка, дефис или подчёркивание; код не должен повторяться.': { en: 'The criterion code in the results file. Use Latin letters, numbers, dots, hyphens or underscores; each code must be unique.', kk: 'Нәтижелер файлындағы критерий коды. Латын әріптерін, сандарды, нүктені, дефисті немесе астын сызу таңбасын қолданыңыз; әр код бірегей болуы керек.' },
+  'Коды для выгрузки должны быть уникальными.': { en: 'Export codes must be unique.', kk: 'Экспорт кодтары бірегей болуы керек.' },
+  'Код для выгрузки: от 1 до 64 латинских букв, цифр, точек, дефисов или подчёркиваний.': { en: 'Export code: 1 to 64 Latin letters, numbers, dots, hyphens or underscores.', kk: 'Экспорт коды: 1–64 латын әрпі, сан, нүкте, дефис немесе астын сызу таңбасы.' },
   'Чек-листы': { en: 'Checklists', kk: 'Чек-парақтар' },
   'Настройте правила оценки. Сохранённая версия применяется при следующей проверке.': { en: 'Configure the evaluation rules. The saved version applies to the next evaluation.', kk: 'Бағалау ережелерін баптаңыз. Сақталған нұсқа келесі тексеруде қолданылады.' },
   'Новый чек-лист': { en: 'New checklist', kk: 'Жаңа чек-парақ' },

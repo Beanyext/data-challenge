@@ -5,7 +5,7 @@ import { EmptyState, Icon, label } from './shared';
 import { localizeMessage, translate as t } from './i18n';
 import { audioUrl, errorText } from './runtime';
 
-type Draft={status:'confirmed'|'changed';answer:Answer;reason:string};
+type Draft={status:'confirmed'|'changed';answer:Answer|'';reason:string};
 type Excerpt={turns:(Turn&{index:number;highlighted:boolean})[];invalidEvidence:boolean;firstTurn:number|null};
 export interface ReviewContext {record:DialogRecord;evaluation:Evaluation;criterion:Criterion;item:CriterionResult;excerpt:Excerpt}
 type Load={loading?:boolean;error?:string;value?:ReviewContext};
@@ -23,7 +23,7 @@ export async function readReviewContext(api:Api,appeal:Appeal,checklists:Checkli
   const checklist=evaluationChecklist(evaluation,checklists) as Checklist|null;
   const criterion=checklist?.criteria.find(item=>item.id===appeal.criterion_id);
   const item=evaluation.criteria?.find(item=>item.criterion_id===appeal.criterion_id);
-  if(!criterion || !item || !answerOptions(criterion).some(answer=>answer===item.answer))throw new Error('Не удалось получить исходный критерий этой оценки. Решение не сохранено.');
+  if(!criterion || !item || !answerOptions(criterion).length || (!answerOptions(criterion).some(answer=>answer===item.answer) && item.needs_review!==true))throw new Error('Не удалось получить исходный критерий этой оценки. Решение не сохранено.');
   const id=evaluation.conversation_id || appeal.conversation_id || rows.find(row=>row.evaluation_id===appeal.evaluation_id)?.conversation_id;
   if(!id)throw new Error('Не удалось определить исходный диалог оценки.');
   const record=await api.getDialog(id);
@@ -71,8 +71,9 @@ export function AppealsWorkspace({active,api,appeals,checklists,rows,onSaved,onO
     if(savingRef.current.has(appeal.id))return;
     const reason=draft.reason.trim();
     if(!reason){notify(t('Укажите причину решения.'),true);return;}
-    const answer=draft.status==='confirmed'?context.item.answer:draft.answer;
-    if(!answerOptions(context.criterion).some(choice=>choice===answer)){notify(t('Выберите допустимый ответ по исходному критерию.'),true);return;}
+    const selected=draft.status==='confirmed'?context.item.answer:draft.answer;
+    const answer=answerOptions(context.criterion).find(choice=>choice===selected);
+    if(answer===undefined){notify(t('Выберите допустимый ответ по исходному критерию.'),true);return;}
     const ticket=generation.current;
     savingRef.current.add(appeal.id);setSaving(previous=>new Set(previous).add(appeal.id));
     try {
@@ -99,7 +100,8 @@ export function AppealsWorkspace({active,api,appeals,checklists,rows,onSaved,onO
     <div className="view-tabs" role="group" aria-label={t('Статус апелляций')}><button type="button" className={`btn ${filter==='open'?'btn-dark':''}`} aria-pressed={filter==='open'} data-appeal-filter="open" onClick={()=>setFilter('open')}>{t('Открытые')} · {appeals.filter(appeal=>appeal.status==='open').length}</button><button type="button" className={`btn ${filter==='all'?'btn-dark':''}`} aria-pressed={filter==='all'} data-appeal-filter="all" onClick={()=>setFilter('all')}>{t('Все обращения')} · {appeals.length}</button></div>
     <section className="panel appeal-queue react-appeals">{visible.length?visible.map(appeal=>{
       const context=contexts[appeal.id],value=context?.value;
-      const draft=drafts[appeal.id] || {status:'confirmed',answer:value?.item.answer ?? 'no',reason:''};
+      const validAnswer=value && answerOptions(value.criterion).some(answer=>answer===value.item.answer);
+      const draft:Draft=drafts[appeal.id] || {status:validAnswer?'confirmed':'changed',answer:validAnswer?value!.item.answer:'',reason:''};
       const busy=saving.has(appeal.id),open=appeal.status==='open' && !resolved.has(appeal.id) && expanded.has(appeal.id);
       return <article className="appeal-card" id={`appeal-${appeal.id}`} key={appeal.id}><div className="appeal-content"><div className="appeal-meta"><span className={`badge ${appeal.status==='open'?'badge-amber':'badge-green'}`}>{label(appeal.status)}</span><span className="muted small">{appeal.conversation_id || appeal.evaluation_id} · {appeal.criterion_id}</span></div><h3>{appeal.criterion_title || t('Пересмотр критерия')}</h3><div className={`appeal-perspectives ${appeal.decision?'has-decision':''}`}><section className="appeal-statement"><h4>{t('Комментарий оператора')}</h4><p>{appeal.comment}</p></section>{appeal.decision&&<section className="appeal-statement appeal-decision"><h4>{t('Решение проверяющего')}</h4><strong>{t('Ответ: {answer}',{answer:label(appeal.decision.answer)})}</strong><p>{appeal.decision.reason}</p></section>}</div></div>
         <div className="actions appeal-actions"><button type="button" className="btn btn-small" data-context={appeal.id} onClick={()=>void openDialog(appeal)}>{t('Открыть диалог')} ↗</button>{appeal.status==='open'&&<button type="button" className="btn btn-small btn-primary" data-review={appeal.id} disabled={busy || context?.loading || resolved.has(appeal.id)} onClick={()=>void load(appeal)}>{t('Рассмотреть')}</button>}</div>
@@ -112,15 +114,16 @@ export function AppealsWorkspace({active,api,appeals,checklists,rows,onSaved,onO
 interface ReviewFormProps {appeal:Appeal;context:ReviewContext;draft:Draft;busy:boolean;api:Api;demo:boolean;onChange:(draft:Draft)=>void;onSave:()=>void;onCancel:()=>void;onOpenDialog:()=>void}
 export function ReviewForm({appeal,context,draft,busy,api,demo,onChange,onSave,onCancel,onOpenDialog}:ReviewFormProps) {
   const {record,criterion,item,excerpt}=context,choices=answerOptions(criterion);
+  const validCurrent=choices.some(answer=>answer===item.answer);
   const selected=draft.status==='changed'?draft.answer:item.answer;
   const roles:Record<string,string>={operator:t('Оператор'),client:t('Клиент'),bot:t('Бот'),system:t('Система')};
-  return <form data-decision={appeal.id} className="review-layout react-review-layout" onSubmit={event=>{event.preventDefault();onSave();}}><section className="review-evidence"><h3>{t('Основание спорной оценки')}</h3><div className="notice"><strong>{criterion.title}</strong><p>{t('Текущий ответ: {answer}.',{answer:label(item.answer)})} {item.explanation}</p></div><p className="small muted">{criterion.description}</p>{item.na_reason&&<p className="small"><strong>{t('Причина N/A:')}</strong> {item.na_reason}</p>}{item.needs_review&&<span className="badge badge-amber">{t('Требуется проверка человеком')}</span>}
+  return <form data-decision={appeal.id} className="review-layout react-review-layout" onSubmit={event=>{event.preventDefault();onSave();}}><section className="review-evidence"><h3>{t('Основание спорной оценки')}</h3><div className="notice"><strong>{criterion.title}</strong><p>{t('Текущий ответ: {answer}.',{answer:validCurrent?label(item.answer):t('Ответ не получен')})} {item.explanation}</p></div><p className="small muted">{criterion.description}</p>{item.na_reason&&<p className="small"><strong>{t('Причина N/A:')}</strong> {item.na_reason}</p>}{item.needs_review&&<span className="badge badge-amber">{t('Требуется проверка человеком')}</span>}
     <h3>{t('Фрагмент диалога')}</h3><p className="small muted">{t('Выделены реплики основания. Соседние сообщения показаны для контекста.')}</p>{excerpt.invalidEvidence&&<div className="notice error">{t('В оценке есть некорректная ссылка на реплику. Проверьте полный диалог.')}</div>}
     {excerpt.turns.length?<div className="review-transcript">{excerpt.turns.map(turn=><article key={turn.index} id={`appeal-${appeal.id}-turn-${turn.index}`} className={`turn turn-${Object.hasOwn(roles,turn.speaker)?turn.speaker:'system'} ${turn.highlighted?'highlight':''}`} tabIndex={-1}><div className="turn-meta"><strong>{roles[turn.speaker] || turn.speaker}</strong><span>№ {turn.index+1} · {turn.timestamp}</span></div><p>{turn.text}</p></article>)}</div>:<div className="notice">{t('Оценка не содержит корректной ссылки на реплику или проверенный участок. Откройте полный диалог перед решением.')}</div>}
     {record.channel==='voice call'&&<ReviewAudio api={api} demo={demo} appealId={appeal.id} conversationId={record.conversation_id} firstTurn={excerpt.firstTurn}/>}
     <button className="text-btn" type="button" data-context={appeal.id} onClick={onOpenDialog}>{t('Открыть полный диалог')} ↗</button></section>
-    <div className="review-decision"><h3>{t('Решение проверяющего')}</h3><fieldset disabled={busy}><legend>{t('Действие')}</legend><div className="radio-row"><label><input type="radio" name="decision-status" value="confirmed" checked={draft.status==='confirmed'} onChange={()=>onChange({...draft,status:'confirmed',answer:item.answer})}/>{t('Подтвердить оценку')}</label><label><input type="radio" name="decision-status" value="changed" checked={draft.status==='changed'} onChange={()=>onChange({...draft,status:'changed'})}/>{t('Изменить оценку')}</label></div></fieldset>
-      <label>{t('Ответ по критерию')}<select name="answer" data-original={item.answer} value={String(selected)} disabled={busy || draft.status==='confirmed'} onChange={event=>{const answer=choices.find(choice=>String(choice)===event.target.value);if(answer!==undefined)onChange({...draft,answer});}}>{choices.map(answer=><option key={String(answer)} value={String(answer)}>{label(answer)}</option>)}</select></label>
+    <div className="review-decision"><h3>{t('Решение проверяющего')}</h3><fieldset disabled={busy}><legend>{t('Действие')}</legend><div className="radio-row"><label><input type="radio" name="decision-status" value="confirmed" disabled={!validCurrent} checked={draft.status==='confirmed'} onChange={()=>onChange({...draft,status:'confirmed',answer:item.answer})}/>{t('Подтвердить оценку')}</label><label><input type="radio" name="decision-status" value="changed" checked={draft.status==='changed'} onChange={()=>onChange({...draft,status:'changed'})}/>{t('Изменить оценку')}</label></div></fieldset>
+      <label>{t('Ответ по критерию')}<select name="answer" data-original={item.answer} value={selected==null?'':String(selected)} required disabled={busy || draft.status==='confirmed'} onChange={event=>{const answer=choices.find(choice=>String(choice)===event.target.value);if(answer!==undefined)onChange({...draft,answer});}}>{!validCurrent&&<option value="" disabled>{t('Выберите допустимый ответ по исходному критерию.')}</option>}{choices.map(answer=><option key={String(answer)} value={String(answer)}>{label(answer)}</option>)}</select></label>
       <label>{t('Причина решения')}<textarea name="reason" required maxLength={4000} value={draft.reason} disabled={busy} placeholder={t('Объясните, что подтверждает решение')} onChange={event=>onChange({...draft,reason:event.target.value})}/></label>
       <div className="actions"><button type="submit" className="btn btn-primary" disabled={busy} aria-busy={busy}>{t(busy?'Сохраняем…':'Сохранить решение')}</button><button type="button" className="btn" data-cancel-review={appeal.id} disabled={busy} onClick={onCancel}>{t('Отмена')}</button></div>
     </div>

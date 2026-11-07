@@ -119,6 +119,10 @@ def build_entry(record: dict, evaluation: dict | None, checklist: dict) -> tuple
             problems.append(c["id"])
     if problems:
         return _error(cid, f"Нет допустимого ответа модели по критериям: {', '.join(problems)}."), []
+    unresolved = [c["id"] for c in checklist["criteria"]
+                  if by_id[c["id"]].get("needs_review") is True or by_id[c["id"]].get("problems")]
+    if unresolved:
+        return _error(cid, f"Требуется проверка человеком: {', '.join(unresolved)}."), []
     sc = score(checklist, answers)
     if sc["total"] is None:
         return _error(cid, "Итог не рассчитан: нет применимых критериев с весом."), []

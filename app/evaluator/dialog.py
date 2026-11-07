@@ -41,7 +41,7 @@ def display_times(transcript: list[dict]) -> list[str]:
     """Время чатов как есть. Время звонков (ISO 8601) переводится в минуты:секунды от первой реплики."""
     raw = [t.get("timestamp") for t in transcript]
     parsed = [_parse_iso(v) for v in raw]
-    if not parsed or any(p is None for p in parsed):
+    if not parsed or any(p is None for p in parsed) or len({p.tzinfo is None for p in parsed}) > 1:
         return [str(v or "") for v in raw]
     start = parsed[0]
     out = []

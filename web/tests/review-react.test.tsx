@@ -183,3 +183,96 @@ test('a review closed by refreshed server state becomes read-only and clears its
     assert.equal(view.container.querySelector('form[data-decision]'),null);assert.equal(view.container.querySelector('[data-review]'),null);assert.equal(dirty.at(-1),false);assert.match(view.container.textContent!,/Уже рассмотрено/);
   } finally {await view.close();}
 });
+
+
+test('editor previews and saves an export code-only change without replacing criterion identity',async()=>{
+  const data=fixture(),saved:Checklist[]=[];
+  const view=await mounted(<ChecklistWorkspace active api={data.api} checklists={[data.checklist]} onSaved={checklist=>{saved.push(checklist);}} notify={()=>{}} onDirtyChange={()=>{}}/>);
+  try {
+    assert.equal(view.container.querySelector<HTMLInputElement>('[data-criterion=code]')!.value,'c01','legacy code defaults to criterion ID');
+    await fill(view.container.querySelector('[data-criterion=code]'),'understanding_v2.test-1');
+    await click(view.container.querySelector('[data-action=save-checklist]'));
+    assert.equal(view.container.querySelectorAll('.diff-item').length,1);
+    assert.match(view.container.querySelector('.diff-before')!.textContent!,/c01/);
+    assert.match(view.container.querySelector('.diff-after')!.textContent!,/understanding_v2.test-1/);
+    await submit(view.container.querySelector('#checklist-save-form'));
+    assert.equal(data.calls.save.length,1);
+    assert.equal(data.calls.save[0].criteria[0].id,'c01');
+    assert.equal(saved[0].criteria[0].code,'understanding_v2.test-1');
+    assert.equal(saved[0].criteria[0].description,data.checklist.criteria[0].description);
+  } finally {await view.close();}
+});
+
+test('editor creates a criterion with its own export code and preserves Cyrillic and special content',async()=>{
+  const data=fixture();
+  const view=await mounted(<ChecklistWorkspace active api={data.api} checklists={[data.checklist]} onSaved={()=>{}} notify={()=>{}} onDirtyChange={()=>{}}/>);
+  try {
+    await click(view.container.querySelector('[data-action=add-criterion]'));
+    assert.equal(view.container.querySelector<HTMLInputElement>('[data-criterion=code]')!.value,'c02');
+    await fill(view.container.querySelector('[data-criterion=code]'),'understanding');
+    const title='Түсіну «Проверка» & <img src=x>';
+    const description='Оператор түсінгенін тексерді. Кириллица & <script>тест</script>';
+    await fill(view.container.querySelector('[data-criterion=title]'),title);
+    await fill(view.container.querySelector('[data-criterion=description]'),description);
+    await click(view.container.querySelector('[data-action=save-checklist]'));
+    assert.equal(view.container.querySelectorAll('.diff-item img,.diff-item script').length,0);
+    assert.match(view.container.querySelector('.diff-after')!.textContent!,/Код для выгрузки: understanding/);
+    await submit(view.container.querySelector('#checklist-save-form'));
+    const added=data.calls.save[0].criteria[1];
+    assert.equal(added.id,'c02');assert.equal(added.code,'understanding');
+    assert.equal(added.title,title);assert.equal(added.description,description);
+  } finally {await view.close();}
+});
+
+test('editor rejects blank, duplicate and non-server export codes without sending a save',async()=>{
+  const data=fixture();data.checklist.criteria[0].code='contact';
+  data.checklist.criteria.push({...clone(data.checklist.criteria[0]),id:'c02',code:'discovery'});
+  const view=await mounted(<ChecklistWorkspace active api={data.api} checklists={[data.checklist]} onSaved={()=>{}} notify={()=>{}} onDirtyChange={()=>{}}/>);
+  try {
+    for(const code of ['', ' ', 'discovery', 'понимание', 'understanding&bad', '<img src=x>', 'x'.repeat(65)]) {
+      await fill(view.container.querySelector('[data-criterion=code]'),code);
+      await click(view.container.querySelector('[data-action=save-checklist]'));
+      assert.equal(data.calls.save.length,0,code);
+      assert.equal(view.container.querySelector('#checklist-save-form'),null,code);
+      assert.match(view.container.querySelector('#editor-errors')!.textContent!,/Код|Коды/,code);
+      assert.equal(view.container.querySelectorAll('#editor-errors img').length,0);
+    }
+  } finally {await view.close();}
+});
+
+for(const locale of ['en','kk'] as const)test(`${locale} criterion export code label and help are translated`,()=>{
+  const data=fixture();
+  try {
+    setLocale(locale);
+    const document=new JSDOM(renderToStaticMarkup(<ChecklistWorkspace active api={data.api} checklists={[data.checklist]} onSaved={()=>{}} notify={()=>{}} onDirtyChange={()=>{}}/>)).window.document;
+    const label=document.querySelector('[data-criterion=code]')!.closest('label')!;
+    assert.match(label.textContent!,locale==='en'?/Export code/:/Экспорт коды/);
+    assert.doesNotMatch(label.textContent!,/Код для выгрузки|Код критерия/);
+  } finally {setLocale('ru');}
+});
+
+
+test('human reviewer can recover a missing model answer only with an explicit valid answer and reason',async()=>{
+  const data=fixture(),notifications:string[]=[];
+  Object.assign(data.evaluation.criteria[0],{answer:null,needs_review:true,problems:['Некорректный ответ модели.']});
+  const context=await readReviewContext(data.api,data.appeal,[data.checklist],[data.record]);
+  assert.equal(context.item.answer,null);
+  const view=await mounted(<AppealsWorkspace active api={data.api} appeals={[data.appeal]} checklists={[data.checklist]} rows={[data.record]} onSaved={()=>{}} onOpenDialog={()=>{}} notify={message=>notifications.push(message)} onDirtyChange={()=>{}} demo/>);
+  try {
+    await click(view.container.querySelector('[data-review]'));
+    const confirm=view.container.querySelector<HTMLInputElement>('[name=decision-status][value=confirmed]')!;
+    assert.equal(confirm.disabled,true);
+    assert.equal(view.container.querySelector<HTMLInputElement>('[name=decision-status][value=changed]')!.checked,true);
+    const answer=view.container.querySelector<HTMLSelectElement>('[name=answer]')!;
+    assert.equal(answer.value,'');assert.equal(answer.disabled,false);assert.equal(answer.required,true);
+    assert.match(view.container.textContent!,/Ответ не получен/);
+    await fill(view.container.querySelector('[name=reason]'),'Проверено по вымышленному диалогу.');
+    await submit(view.container.querySelector('form[data-decision]'));assert.equal(data.calls.decisions.length,0);
+    assert.match(notifications.at(-1)!,/допустимый ответ/);
+    await act(async()=>{answer.value='no';answer.dispatchEvent(new dom.window.Event('change',{bubbles:true}));});
+    await submit(view.container.querySelector('form[data-decision]'));
+    assert.deepEqual(data.calls.decisions,[{id:data.appeal.id,payload:{answer:'no',reason:'Проверено по вымышленному диалогу.',status:'changed'}}]);
+  }finally{await view.close();}
+  Object.assign(data.evaluation.criteria[0],{answer:null,needs_review:false});
+  await assert.rejects(readReviewContext(data.api,data.appeal,[data.checklist],[data.record]),/исходный критерий/);
+});
