@@ -366,10 +366,10 @@ def test_turn_numbers_follow_transcript_and_short_reason():
     assert short_reason("Основание — реплика [4].", "Завершение") == "Основание — реплика [5]."
 
 
-def _finished(c, cid, answers, explanation, provider="anthropic", cost=0.05, seconds=20.0):
+def _finished(c, cid, answers, explanation, provider="anthropic", cost=0.05, seconds=20.0, suffix=""):
     store = c.app.state.store
     checklist = store.get_checklist("freedom-chat", 1)
-    ev_id, job_id = f"ev-{cid}", f"job-{cid}"
+    ev_id, job_id = f"ev-{cid}{suffix}", f"job-{cid}{suffix}"
     store.create_job(job_id, checklist, [(ev_id, cid)])
     store.finish_evaluation(ev_id, job_id, {
         "conversation_id": cid, "provider": provider, "model": "claude-opus-5-5", "cost_usd": cost,
@@ -442,3 +442,42 @@ def test_load_saved_evaluations_without_model(tmp_path):
         rows = {r["conversation_id"]: r for r in c.get("/api/dialogs").json()}
         assert rows["l-1"]["status"] == "evaluated" and rows["l-1"]["total"] is not None
         assert c.get("/api/health").json()["estimate"]["cost_per_dialog_usd"] == 0.05
+
+
+def test_history_preserves_zero_and_marks_partial_without_read_side_effects(client):
+    upload(client, [chat('synthetic-history')])
+    partial = {'c01': None, 'c02': 'na', 'c03': 'na', 'c04': 15, 'c05': 'yes', 'c06': 7, 'c07': 'yes', 'c08': 'no'}
+    old = _finished(client, 'synthetic-history', partial, lambda _: 'Synthetic partial assessment.')
+    zero = {'c01': 'no', 'c02': 'no', 'c03': 'no', 'c04': 0, 'c05': 'no', 'c06': 0, 'c07': 'no', 'c08': 'no'}
+    latest = _finished(client, 'synthetic-history', zero, lambda _: 'Synthetic zero assessment.', suffix='-zero')
+    response = client.get('/api/dialogs/synthetic-history/evaluations')
+    assert response.status_code == 200
+    history = response.json()
+    assert [item['id'] for item in history] == [latest, old]
+    assert history[0]['total'] == 0 and history[0]['complete'] is True
+    assert history[1]['complete'] is False
+    assert all('needs_review_count' in item and 'transcript' not in item and 'criteria' not in item for item in history)
+    assert client.get('/api/dialogs/synthetic-history/evaluations').json() == history
+
+
+def test_failed_only_retry_is_atomic_and_preserves_successful_and_pending(client):
+    upload(client, [chat('synthetic-error'), chat('synthetic-ok'), chat('synthetic-pending')])
+    successful = evaluate(client, ['synthetic-ok'])['evaluation_ids'][0]
+    store = client.app.state.store
+    checklist = store.get_checklist('freedom-chat')
+    store.create_job('failed-only-source', checklist, [('failed-only-error','synthetic-error')])
+    store.finish_evaluation('failed-only-error', 'failed-only-source', {'error':'Synthetic failed result'})
+    store.create_job('failed-only-pending', checklist, [('failed-only-wait','synthetic-pending')])
+    payload = {'conversation_ids':['synthetic-error','synthetic-ok'], 'checklist_id':'freedom-chat', 'only_failed':True}
+    assert client.post('/api/evaluations', json=payload).status_code == 409
+    assert store.latest_evaluation('synthetic-error')['id'] == 'failed-only-error'
+    assert store.latest_evaluation('synthetic-ok')['id'] == successful
+    assert client.post('/api/evaluations', json={**payload,'conversation_ids':['synthetic-pending']}).status_code == 409
+    response = client.post('/api/evaluations', json={**payload,'conversation_ids':['synthetic-error']})
+    assert response.status_code == 200
+    job = wait_job(client, response.json()['id'])
+    assert job['status'] == 'completed' and job['total'] == 1 and job['failed'] == 0
+    assert store.latest_evaluation('synthetic-ok')['id'] == successful
+    assert store.latest_evaluation('synthetic-pending')['id'] == 'failed-only-wait'
+    assert client.post('/api/evaluations', json={**payload,'conversation_ids':['synthetic-error']}).status_code == 409
+    assert client.post('/api/evaluations', json={**payload,'only_failed':'true'}).status_code == 400

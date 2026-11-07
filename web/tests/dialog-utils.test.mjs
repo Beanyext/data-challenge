@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { attentionReasons, filterDialogs, summarizeDialogs, reviewExcerpt, evaluationChecklist } from '../dialog-utils.mjs';
+import { attentionReasons, failedDialogIds, filterDialogs, summarizeDialogs, reviewExcerpt, evaluationChecklist } from '../dialog-utils.mjs';
 
 const rows = [
   { conversation_id:'a', evaluation_id:'ev-a', channel:'agent chat', language:'RU', total:80 },
@@ -60,4 +60,15 @@ test('invalid ranges are rejected; valid range is a positive control', () => {
   const valid=reviewExcerpt(record,{checked_range:{from:1,to:2}},0);
   assert.deepEqual(valid.turns.map(turn=>turn.index),[1,2]);
   assert.equal(valid.invalidEvidence,false);
+});
+
+
+test('retry targets only failed visible rows; pending and successful histories are preserved',()=>{
+  const input=[{conversation_id:'bad-ru',language:'RU',status:'error',evaluation_id:'bad'}, {conversation_id:'bad-kz',language:'KZ',status:'error'}, {conversation_id:'ok',language:'RU',status:'done',evaluation_id:'good',total:0}, {conversation_id:'waiting',language:'RU',status:'pending',evaluation_id:'pending'}, {conversation_id:'new',language:'RU',status:'new'}];
+  assert.deepEqual(failedDialogIds(filterDialogs(input,{language:'RU'})),['bad-ru']);
+  assert.deepEqual(failedDialogIds(filterDialogs(input,{status:'error'})),['bad-ru','bad-kz']);
+  assert.equal(filterDialogs(input,{queue:'attention'}).length,2);
+  assert.equal(summarizeDialogs(input).evaluated,1);
+  assert.deepEqual(failedDialogIds([]),[]);
+  assert.deepEqual(failedDialogIds([input[0],input[0]]),['bad-ru']);
 });

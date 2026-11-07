@@ -101,10 +101,13 @@ class Runner:
         except EvaluationError as e:
             _fail(503, f"Модель недоступна: {e}")
 
-    def start(self, records: list[dict], checklist: dict) -> dict:
+    def start(self, records: list[dict], checklist: dict, only_failed: bool = False) -> dict:
         job_id = new_id("job")
         items = [(new_id("ev"), r["conversation_id"]) for r in records]
-        self.store.create_job(job_id, checklist, items)
+        with self.store.lock:
+            if only_failed and any((self.store.latest_evaluation(r["conversation_id"]) or {}).get("status") != "error" for r in records):
+                _fail(409, "Список ошибок изменился. Обновите диалоги и выберите повтор заново.")
+            self.store.create_job(job_id, checklist, items)
         for (ev_id, _), record in zip(items, records):
             self.pool.submit(self._one, job_id, ev_id, record, checklist)
         return self.store.get_job(job_id)
@@ -201,7 +204,7 @@ def create_app(db_path: str | Path | None = None, provider: str | None = None, w
         for ev in store.evaluations_for(cid):
             v = evaluation_view(store, ev, with_appeals=False)
             out.append({k: v.get(k) for k in ("id", "status", "checklist_id", "checklist_version", "total",
-                                              "original_total", "gross_error", "model", "created_at", "error")})
+                                              "original_total", "gross_error", "model", "created_at", "error", "complete", "needs_review_count")})
         return out
 
     @app.get("/api/dialogs/{cid}/audio")
@@ -313,9 +316,12 @@ def create_app(db_path: str | Path | None = None, provider: str | None = None, w
         missing = [i for i in ids if store.get_dialog(i) is None]
         if missing:
             _fail(404, f"Нет таких диалогов: {', '.join(missing[:5])}")
+        only_failed = payload.get("only_failed", False)
+        if not isinstance(only_failed, bool):
+            _fail(400, "only_failed должен быть boolean.")
         runner.check_ready()
         records = [store.get_dialog(i)["record"] for i in ids]
-        return runner.start(records, checklist)
+        return runner.start(records, checklist, only_failed=only_failed)
 
     @app.get("/api/jobs/{job_id}")
     def get_job(job_id: str):

@@ -236,3 +236,21 @@ test('demo rows and appeals carry call length, display time, version and the dis
   assert.ok(appeal.fragment.some(turn => turn.turn === appeal.criterion.evidence[0].turn));
   assert.equal((await api.listDialogs())[0].open_appeals, 1);
 });
+
+
+test('history adapter uses encoded read-only route and demo retains earlier checklist runs',async t=>{
+  const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});
+  const reads=[];globalThis.fetch=async(url,options)=>{reads.push([url,options.method]);return Response.json({evaluations:[{id:'old',status:'done',total:0}]});};
+  assert.equal((await createApi().listEvaluations('ҚАЗ &?'))[0].total,0);
+  assert.deepEqual(reads,[['/api/dialogs/'+encodeURIComponent('ҚАЗ &?')+'/evaluations','GET']]);
+  const api=createDemoApi({storage:storage()}),rows=await api.listDialogs(),id=rows[0].conversation_id;
+  const prior=await api.listEvaluations(id),initial=await api.getEvaluation(prior[0].id);
+  const checklist=(await api.listChecklists())[0];
+  await api.saveChecklist({...checklist,name:'Вымышленная новая версия'});
+  await finish(api,await api.evaluate([id],checklist.id));
+  const history=await api.listEvaluations(id);
+  assert.equal(history.length,prior.length+1);
+  assert.equal(history[0].checklist_version,checklist.version+1);
+  assert.equal(history.at(-1).id,prior.at(-1).id);
+  assert.deepEqual(await api.getEvaluation(initial.id),initial);
+});

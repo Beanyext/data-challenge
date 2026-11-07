@@ -22,7 +22,7 @@ export function DensitySwitch({ value, onChange }: { value: Density; onChange: (
 export function ActiveFilters({ filters, onRemove, onReset }: { filters: Filters; onRemove?:(key:keyof Filters)=>void; onReset?:()=>void }) {
   const channels: Record<string, string> = { 'agent chat': t('Чаты'), 'voice call': t('Звонки') };
   const languages: Record<string, string> = { RU: t('Русский'), KZ: t('Қазақша'), EN: t('English') };
-  const statuses: Record<string, string> = { completed: t('С оценкой'), pending: t('Без оценки'), gross: t('Грубая ошибка'), review:t('Нужна проверка'), appeal:t('Открытая апелляция') };
+  const statuses: Record<string, string> = { completed: t('С оценкой'), pending: t('Без оценки'), gross: t('Грубая ошибка'), review:t('Нужна проверка'), appeal:t('Открытая апелляция'), error:t('Ошибка оценки') };
   const entries: { key: keyof Filters; label: string; value: string }[] = [
     { key: 'query', label: t('Поиск'), value: filters.query },
     { key: 'channel', label: t('Канал'), value: channels[filters.channel] || filters.channel },

@@ -1,3 +1,6 @@
+import { operationsMessages } from './messages/operations';
+import { analyticsMessages } from './messages/analytics';
+import { historyMessages } from './messages/history';
 import { mainReviewMessages } from './messages/main-integration';
 import { uxMessages } from './messages/ux';
 import { commonMessages } from './messages/common';
@@ -13,7 +16,7 @@ import { reportMessages } from './messages/report';
 
 export type Locale = 'ru' | 'kk' | 'en';
 export const LANGUAGE_KEY = 'cqa-ui-language';
-export const catalog = { ...mainReviewMessages, ...formsMessages, ...pagesMessages, ...resultMessages, ...errorMessages, ...commonMessages, ...rootMessages, ...workflowMessages, ...reviewMessages, ...submissionMessages, ...reportMessages, ...uxMessages };
+export const catalog = { ...operationsMessages, ...analyticsMessages, ...historyMessages, ...mainReviewMessages, ...formsMessages, ...pagesMessages, ...resultMessages, ...errorMessages, ...commonMessages, ...rootMessages, ...workflowMessages, ...reviewMessages, ...submissionMessages, ...reportMessages, ...uxMessages };
 export const isLocale = (value: unknown): value is Locale => value === 'ru' || value === 'kk' || value === 'en';
 export function readLocale(url: string, storage?: Pick<Storage, 'getItem'>): Locale {
   const query = new URL(url).searchParams.get('lang');

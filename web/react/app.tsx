@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { createApi } from '../api.mjs';
-import { evaluationChecklist } from '../dialog-utils.mjs';
+import { evaluationChecklist, failedDialogIds } from '../dialog-utils.mjs';
 import { DialogsWorkspace, DialogWorkspace, EstimateNote } from './pages';
 import { ChecklistWorkspace } from './forms';
 import { AppealsWorkspace } from './review';
 import { SubmissionWorkspace } from './submission';
+import { AnalyticsWorkspace } from './analytics';
+import { EvaluationHistory } from './history';
 import { ReportView } from './report';
 import { LanguageSwitcher } from './language-switcher';
 import { FocusToggle } from './review-tools';
@@ -15,13 +17,15 @@ import { errorText, navigate } from './runtime';
 import type { Api, Appeal, Checklist, DialogRecord, Evaluation, ListState, Notify, Health } from './types';
 
 type Connection = { baseUrl:string; demo:boolean };
-type Route = { page:string; id:string };
-type ModalState = { kind:'settings' } | { kind:'import' } | { kind:'evaluate'; ids:string[]; checklistId?:string } | { kind:'appeal'; evaluationId:string; criterionId:string; title:string };
+type Route = { page:string; id:string; evaluationId:string; invalidEvaluation:boolean };
+type ModalState = { kind:'settings' } | { kind:'import' } | { kind:'evaluate'; ids:string[]; checklistId?:string; retry?:boolean } | { kind:'appeal'; evaluationId:string; criterionId:string; title:string };
 type JobProgress = { completed:number; total:number; error?:string; paused?:boolean };
 const readRoute = ():Route => {
-  const [page='dialogs',value='']=location.hash.slice(1).split('/');
+  const [page='dialogs',value='',child='',saved='']=location.hash.slice(1).split('/');
   let id='';try{id=decodeURIComponent(value);}catch{/* Invalid route IDs are never sent to the API. */}
-  return {page:page || 'dialogs',id};
+  let evaluationId='',invalidEvaluation=false;
+  if(child==='evaluation'){try{evaluationId=decodeURIComponent(saved);invalidEvaluation=!evaluationId;}catch{invalidEvaluation=true;}}
+  return {page:page || 'dialogs',id,evaluationId,invalidEvaluation};
 };
 function initialConnection():Connection {
   let saved:Partial<Connection>={};try{saved=JSON.parse(localStorage.getItem('cqa-connection') || '{}');}catch{/* Optional persistence. */}
@@ -36,7 +40,7 @@ function rememberJob(id:string|null,connection:Connection) {
 }
 function blockedApi(message:string):Api {
   const unavailable=async()=>{throw new Error(message);};
-  return {demo:false,listDialogs:unavailable,getDialog:unavailable,listChecklists:unavailable,saveChecklist:unavailable,importDialogs:unavailable,uploadDialog:unavailable,evaluate:unavailable,getJob:unavailable,getEvaluation:unavailable,listAppeals:unavailable,createAppeal:unavailable,decideAppeal:unavailable,getAudio:unavailable};
+  return {demo:false,listDialogs:unavailable,getDialog:unavailable,listChecklists:unavailable,saveChecklist:unavailable,importDialogs:unavailable,uploadDialog:unavailable,evaluate:unavailable,getJob:unavailable,getEvaluation:unavailable,listEvaluations:unavailable,listAppeals:unavailable,createAppeal:unavailable,decideAppeal:unavailable,getAudio:unavailable};
 }
 
 export function App() {
@@ -65,8 +69,9 @@ export function App() {
   const notify:Notify=useCallback((text,error=false)=>setToast(previous=>({text,error,revision:(previous?.revision || 0)+1})),[]);
   const refresh=useCallback(()=>setRefreshVersion(value=>value+1),[]);
   const openDialog=useCallback((id:string)=>navigate(`dialog/${encodeURIComponent(id)}`),[]);
+  const openEvaluation=useCallback((conversationId:string,id:string)=>navigate(`dialog/${encodeURIComponent(conversationId)}/evaluation/${encodeURIComponent(id)}`),[]);
   const navPage=['dialog','report'].includes(route.page)?'dialogs':route.page;
-  const breadcrumb=t(({dialogs:'Диалоги',dialog:'Карточка диалога',report:'Отчёт',checklists:'Чек-листы',appeals:'Апелляции',submission:'Выгрузка'} as Record<string,string>)[route.page] || 'Диалоги');
+  const breadcrumb=t(({dialogs:'Диалоги',dialog:'Карточка диалога',report:'Отчёт',checklists:'Чек-листы',appeals:'Апелляции',submission:'Выгрузка',analytics:'Аналитика'} as Record<string,string>)[route.page] || 'Диалоги');
 
   useEffect(()=>{
     const changed=()=>{setRoute(readRoute());setToast(previous=>previous?.error?previous:null);window.scrollTo({top:0});requestAnimationFrame(()=>mainRef.current?.focus({preventScroll:true}));};
@@ -96,8 +101,11 @@ export function App() {
         let loadedDetail:typeof detail=null;
         if(['dialog','report'].includes(route.page) && route.id) {
           const record=await api.getDialog(route.id);
-          const evaluationId=record.evaluation_id || rows.find(item=>item.conversation_id===record.conversation_id)?.evaluation_id;
-          loadedDetail={record,evaluation:evaluationId?await api.getEvaluation(evaluationId):null};
+          if(route.invalidEvaluation)throw new Error('Не удалось открыть сохранённую оценку. Проверьте ссылку.');
+          const evaluationId=route.evaluationId || record.evaluation_id || rows.find(item=>item.conversation_id===record.conversation_id)?.evaluation_id;
+          const evaluation=evaluationId?await api.getEvaluation(evaluationId):null;
+          if(route.evaluationId && (!evaluation || evaluation.id!==route.evaluationId || evaluation.conversation_id!==record.conversation_id))throw new Error('Оценка не относится к выбранному диалогу.');
+          loadedDetail={record,evaluation};
         }
         if(ignored)return;
         setData({rows,checklists,appeals:resolved});setDetail(loadedDetail);
@@ -105,7 +113,7 @@ export function App() {
       finally{if(!ignored)setLoading(false);}
     })();
     return ()=>{ignored=true;};
-  },[api,route.page,route.id,refreshVersion,service.error]);
+  },[api,route.page,route.id,route.evaluationId,route.invalidEvaluation,refreshVersion,service.error]);
   useEffect(()=>{
     if(!jobId)return;
     let ignored=false,timer:ReturnType<typeof setTimeout>|undefined,wake:(()=>void)|undefined;
@@ -141,11 +149,11 @@ export function App() {
     const url=persistLocale(value,{currentUrl:location.href});setLanguage(value);history.replaceState(null,'',url);
     return true;
   };
-  const openEvaluate=(ids:string[],checklistId?:string)=>{
+  const openEvaluate=(ids:string[],checklistId?:string,retry=false)=>{
     if(busy || startingRef.current){notify('Предыдущее задание ещё выполняется. Дождитесь результата.');return;}
     if(!ids.length){notify('Сначала выберите диалог.',true);return;}
     if(!data.checklists.length){notify('Сначала создайте чек-лист.',true);return;}
-    setModal({kind:'evaluate',ids,checklistId});
+    setModal({kind:'evaluate',ids,checklistId,retry});
   };
   const openSettings=()=>{if(busy)notify('Дождитесь завершения оценки перед сменой источника данных.');else setModal({kind:'settings'});};
   const upload=async(file:File)=>{
@@ -178,7 +186,12 @@ export function App() {
         if(startingRef.current || currentJob.current)throw new Error('Предыдущее задание ещё выполняется.');
         startingRef.current=true;setStarting(true);
         try {
-          const job=await api.evaluate(modal.ids,String(values.get('checklistId') || ''));
+          if(modal.retry){
+            const failed=new Set(failedDialogIds(await api.listDialogs()) as string[]);
+            if(modal.ids.some(id=>!failed.has(id))){refresh();throw new Error('Список ошибок изменился. Обновите диалоги и выберите повтор заново.');}
+          }
+          const job=await api.evaluate(modal.ids,String(values.get('checklistId') || ''),modal.retry?{only_failed:true}:undefined);
+          if(route.evaluationId && modal.ids.length===1)openDialog(modal.ids[0]);
           if(!job?.id)throw new Error('Сервер не вернул номер задания.');
           currentJob.current=String(job.id);rememberJob(String(job.id),connection);setJobId(String(job.id));
         }finally{startingRef.current=false;setStarting(false);}
@@ -196,7 +209,7 @@ export function App() {
     setConnection(previous=>({...previous,demo:true}));setListState(previous=>({...previous,selected:new Set()}));navigate('dialogs');
   };
   const snapshot=detail?.evaluation?evaluationChecklist(detail.evaluation,data.checklists) as Checklist|null:null;
-  const nav=[['dialogs','dialogs','Диалоги'],['checklists','list','Чек-листы'],['appeals','appeal','Апелляции'],['submission','download','Выгрузка']];
+  const nav=[['dialogs','dialogs','Диалоги'],['checklists','list','Чек-листы'],['appeals','appeal','Апелляции'],['analytics','chart','Аналитика'],['submission','download','Выгрузка']];
   const errorActions=<><button className="btn btn-primary" data-action="retry" onClick={refresh}>{t('Повторить')}</button><button className="btn" data-action="settings" onClick={openSettings}>{t('Настроить API')}</button><button className="btn btn-ghost" data-action="demo" onClick={openDemo}>{t('Открыть учебный пример')}</button></>;
   return <>
     <a className="skip-link" href="#main" onClick={event=>{event.preventDefault();mainRef.current?.focus();}}>{t('К содержимому')}</a>
@@ -207,9 +220,10 @@ export function App() {
     <main id="main" ref={mainRef} tabIndex={-1}>
       {route.page!=='submission' && loading && <div className="panel loading" aria-label={t('Загрузка')} aria-busy="true"><div className="skeleton wide"/><div className="skeleton"/><div className="skeleton"/></div>}
       {route.page!=='submission' && !loading && loadError && <><div className="page-heading"><div><h1>{t('Нет подключения к данным')}</h1><p>{t('Интерфейс работает, но сервер пока не ответил.')}</p></div></div><section className="panel"><EmptyState title={t('Не удалось получить данные')} text={localizeMessage(loadError)} actions={errorActions}/></section></>}
-      {!loading && !loadError && !['checklists','appeals','submission'].includes(route.page) && <MotionFrame key={`${route.page}/${route.id}`}>
-      {['dialog','report'].includes(route.page) && detail?route.page==='report'?<ReportView dialog={detail.record} evaluation={detail.evaluation} checklist={snapshot} appeals={data.appeals} demo={connection.demo} onBack={()=>openDialog(detail.record.conversation_id)}/>:<DialogWorkspace record={detail.record} evaluation={detail.evaluation} checklist={snapshot} checklists={data.checklists} appeals={data.appeals} api={api} demo={connection.demo} busy={busy} onEvaluate={openEvaluate} onAppeal={criterionId=>{if(detail.evaluation)setModal({kind:'appeal',criterionId,evaluationId:detail.evaluation.id,title:snapshot?.criteria.find(criterion=>criterion.id===criterionId)?.title || criterionId});}} onReport={()=>navigate(`report/${encodeURIComponent(detail.record.conversation_id)}`)} notify={notify}/>:<DialogsWorkspace rows={data.rows} appeals={data.appeals} state={listState} onState={setListState} busy={busy} onEvaluate={openEvaluate} onOpenDialog={openDialog} onImport={()=>setModal({kind:'import'})} onUpload={()=>document.getElementById('upload-file')?.click()} onSubmission={()=>navigate('submission')}/>}
+      {!loading && !loadError && !['checklists','appeals','submission','analytics'].includes(route.page) && <MotionFrame key={`${route.page}/${route.id}`}>
+      {['dialog','report'].includes(route.page) && detail?route.page==='report'?<ReportView dialog={detail.record} evaluation={detail.evaluation} checklist={snapshot} appeals={data.appeals} demo={connection.demo} onBack={()=>detail.evaluation?openEvaluation(detail.record.conversation_id,detail.evaluation.id):openDialog(detail.record.conversation_id)}/>:<><DialogWorkspace key={`${detail.record.conversation_id}:${detail.evaluation?.id || ''}`} record={detail.record} evaluation={detail.evaluation} checklist={snapshot} checklists={data.checklists} appeals={data.appeals} api={api} demo={connection.demo} busy={busy} onEvaluate={openEvaluate} onAppeal={criterionId=>{if(detail.evaluation)setModal({kind:'appeal',criterionId,evaluationId:detail.evaluation.id,title:snapshot?.criteria.find(criterion=>criterion.id===criterionId)?.title || criterionId});}} onReport={()=>navigate(detail.evaluation?`report/${encodeURIComponent(detail.record.conversation_id)}/evaluation/${encodeURIComponent(detail.evaluation.id)}`:`report/${encodeURIComponent(detail.record.conversation_id)}`)} notify={notify}/><EvaluationHistory api={api} conversationId={detail.record.conversation_id} currentEvaluationId={detail.evaluation?.id} latestEvaluationId={detail.record.evaluation_id} onOpen={id=>openEvaluation(detail.record.conversation_id,id)} refreshKey={refreshVersion}/></>:<DialogsWorkspace rows={data.rows} appeals={data.appeals} state={listState} onState={setListState} busy={busy} onEvaluate={openEvaluate} onRetryFailed={ids=>openEvaluate(ids,undefined,true)} onOpenDialog={openDialog} onImport={()=>setModal({kind:'import'})} onUpload={()=>document.getElementById('upload-file')?.click()} onSubmission={()=>navigate('submission')}/>}
       </MotionFrame>}
+      <AnalyticsWorkspace api={api} rows={data.rows} active={route.page==='analytics' && !loading && !loadError} onOpenDialog={openDialog} refreshKey={refreshVersion}/>
       <ChecklistWorkspace key={`editor-${connection.baseUrl}-${connection.demo}`} active={route.page==='checklists' && !loading && !loadError} api={api} checklists={data.checklists} onSaved={onChecklistSaved} notify={notify} onDirtyChange={setEditorDirty}/>
       <AppealsWorkspace key={`appeals-${connection.baseUrl}-${connection.demo}`} active={route.page==='appeals' && !loading && !loadError} api={api} appeals={data.appeals} checklists={data.checklists} rows={data.rows} onSaved={refresh} onOpenDialog={openDialog} notify={notify} onDirtyChange={setReviewDirty} demo={connection.demo}/>
       <SubmissionWorkspace active={route.page==='submission'} api={api} demo={connection.demo} teamName={window.CQA_CONFIG?.teamName || 'seeusoon'} notify={notify} connectionError={service.error} onSettings={openSettings}/>
@@ -228,7 +242,7 @@ function ApplicationModal({modal,api,connection,checklists,onClose,onSubmit,noti
   const title=t(modal.kind==='settings'?'Подключение к данным':modal.kind==='import'?'Импорт набора':modal.kind==='evaluate'?'Запустить оценку':'Оспорить оценку');
   const id=modal.kind==='settings'?'settings-form':modal.kind==='import'?'import-form':modal.kind==='evaluate'?'evaluate-form':'appeal-form';
   return <Modal title={title} onClose={onClose} busy={sending}><form id={id} className="form-stack" onSubmit={submit} data-criterion-id={modal.kind==='appeal'?modal.criterionId:undefined}><fieldset disabled={sending} className="modal-fields">
-    {modal.kind==='settings'?<><p className="modal-description">{t('Укажите адрес сервера вашей команды. Ключи AI и ссылка организаторов остаются на сервере.')}</p><fieldset><legend>{t('Источник данных')}</legend><div className="form-stack"><label><input type="radio" name="mode" value="api" defaultChecked={!connection.demo}/>{t('Сервер команды')}</label><label><input type="radio" name="mode" value="demo" defaultChecked={connection.demo}/>{t('Учебный пример без AI')}</label></div></fieldset><label>{t('Базовый адрес API')}<input name="baseUrl" defaultValue={connection.baseUrl} required placeholder="http://127.0.0.1:8000/api"/></label><p className="muted small">{t('Для сервера на том же адресе используйте /api. Учебные изменения сохраняются только в этом браузере.')}</p></>:modal.kind==='import'?<><p className="modal-description">{t('Сервер получит диалоги по group_id. Для контрольного набора введите значение от организаторов.')}</p><label>{t('Группа набора')}<input name="groupId" required maxLength={100} defaultValue="DEV" autoComplete="off"/></label>{connection.demo && <div className="notice">{t('Учебный режим не загружает набор организаторов. Для импорта подключите сервер команды.')}</div>}</>:modal.kind==='evaluate'?<><p className="modal-description">{t('Диалогов: {count}. Оценка пройдёт в фоне.',{count:modal.ids.length})}</p><EstimateNote health={health} count={modal.ids.length}/><label>{t('Чек-лист')}<select name="checklistId" defaultValue={modal.checklistId || checklists[0]?.id}>{checklists.map(checklist=><option key={`${checklist.id}@${checklist.version}`} value={checklist.id}>{checklist.name} · v{checklist.version}</option>)}</select></label><label><input name="confirm" type="checkbox" required/>{t(connection.demo?'Понимаю, что это учебная оценка без AI':'Подтверждаю запуск AI-оценки. Если сервер использует платный API, возможны расходы')}</label></>:<><p className="modal-description">{modal.title}. {t('Проверяющий увидит комментарий вместе с оценкой и фрагментом диалога.')}</p><label>{t('Почему вы не согласны')}<textarea name="comment" required maxLength={4000} rows={4} placeholder={t('Укажите, какой фрагмент стоит проверить')}/></label></>}
+    {modal.kind==='settings'?<><p className="modal-description">{t('Укажите адрес сервера вашей команды. Ключи AI и ссылка организаторов остаются на сервере.')}</p><fieldset><legend>{t('Источник данных')}</legend><div className="form-stack"><label><input type="radio" name="mode" value="api" defaultChecked={!connection.demo}/>{t('Сервер команды')}</label><label><input type="radio" name="mode" value="demo" defaultChecked={connection.demo}/>{t('Учебный пример без AI')}</label></div></fieldset><label>{t('Базовый адрес API')}<input name="baseUrl" defaultValue={connection.baseUrl} required placeholder="http://127.0.0.1:8000/api"/></label><p className="muted small">{t('Для сервера на том же адресе используйте /api. Учебные изменения сохраняются только в этом браузере.')}</p></>:modal.kind==='import'?<><p className="modal-description">{t('Сервер получит диалоги по group_id. Для контрольного набора введите значение от организаторов.')}</p><label>{t('Группа набора')}<input name="groupId" required maxLength={100} defaultValue="DEV" autoComplete="off"/></label>{connection.demo && <div className="notice">{t('Учебный режим не загружает набор организаторов. Для импорта подключите сервер команды.')}</div>}</>:modal.kind==='evaluate'?<><p className="modal-description">{t('Диалогов: {count}. Оценка пройдёт в фоне.',{count:modal.ids.length})}</p>{modal.retry&&<div className="notice">{t('Повторяются только ошибки текущей выборки. Успешные оценки сохраняются.')}</div>}<EstimateNote health={health} count={modal.ids.length}/><label>{t('Чек-лист')}<select name="checklistId" defaultValue={modal.checklistId || checklists[0]?.id}>{checklists.map(checklist=><option key={`${checklist.id}@${checklist.version}`} value={checklist.id}>{checklist.name} · v{checklist.version}</option>)}</select></label><label><input name="confirm" type="checkbox" required/>{t(connection.demo?'Понимаю, что это учебная оценка без AI':'Подтверждаю запуск AI-оценки. Если сервер использует платный API, возможны расходы')}</label></>:<><p className="modal-description">{modal.title}. {t('Проверяющий увидит комментарий вместе с оценкой и фрагментом диалога.')}</p><label>{t('Почему вы не согласны')}<textarea name="comment" required maxLength={4000} rows={4} placeholder={t('Укажите, какой фрагмент стоит проверить')}/></label></>}
     <div className="form-actions"><button className="btn" type="button" data-action="close-modal" onClick={onClose}>{t('Отмена')}</button><button className="btn btn-primary" type="submit" aria-busy={sending}>{t(sending?'Сохранение…':modal.kind==='settings'?'Подключиться':modal.kind==='import'?'Импортировать набор':modal.kind==='evaluate'?(modal.ids.length===1?'Оценить диалог':'Оценить диалоги'):'Подать апелляцию')}</button></div>
   </fieldset></form></Modal>;
 }

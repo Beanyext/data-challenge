@@ -81,9 +81,10 @@ export function createApi({ baseUrl = '/api', demo = false, timeout = 20000 } = 
       const body = new FormData(); body.append('file', file);
       return request('/dialogs/upload', { method: 'POST', body, multipart: true });
     },
-    evaluate: (conversationIds, checklistId) => request('/evaluations', { method: 'POST', body: { conversation_ids: conversationIds, checklist_id: checklistId } }),
+    evaluate: (conversationIds, checklistId, options = {}) => request('/evaluations', { method: 'POST', body: { conversation_ids: conversationIds, checklist_id: checklistId, ...(options.only_failed === true ? {only_failed:true} : {}) } }),
     getJob: value => request(`/jobs/${id(value)}`),
     getEvaluation: value => request(`/evaluations/${id(value)}`),
+    listEvaluations: async value => arrayResult(await request(`/dialogs/${id(value)}/evaluations`), 'evaluations'),
     listAppeals: async () => arrayResult(await request('/appeals'), 'appeals'),
     createAppeal: payload => request('/appeals', { method: 'POST', body: payload }),
     decideAppeal: (value, payload) => request(`/appeals/${id(value)}/decision`, { method: 'POST', body: payload }),

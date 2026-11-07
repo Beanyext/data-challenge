@@ -5,6 +5,7 @@ export function dialogTitle(row) {
 }
 
 export function hasEvaluation(row) {
+  if (['error', 'pending', 'queued', 'running'].includes(row.status)) return false;
   return Boolean(row.evaluation_id) || completedStates.has(row.status) || Number.isFinite(row.total);
 }
 
@@ -18,6 +19,7 @@ export function evaluationChecklist(evaluation, checklists = []) {
 
 export function attentionReasons(row, appeals = []) {
   const reasons = [];
+  if (row.status === 'error') reasons.push('error');
   if (row.gross_error) reasons.push('gross');
   if (row.needs_review || (Array.isArray(row.criteria) && row.criteria.some(item => item.needs_review))) reasons.push('review');
   if (appeals.some(appeal => appeal.status === 'open' && (
@@ -34,13 +36,14 @@ export function filterDialogs(rows, filters = {}, appeals = []) {
     if (filters.language && row.language !== filters.language) return false;
     if (filters.channel && row.channel !== filters.channel) return false;
     if (query && !`${row.conversation_id} ${dialogTitle(row)} ${(row.transcript || []).map(turn => turn.text).join(' ')}`.toLocaleLowerCase().includes(query)) return false;
+    if (filters.status === 'error' && row.status !== 'error') return false;
     if (filters.status === 'completed' && !hasEvaluation(row)) return false;
     if (filters.status === 'pending' && hasEvaluation(row)) return false;
     if (['gross', 'review', 'appeal'].includes(filters.status) && !reasons.includes(filters.status)) return false;
     return true;
   });
   if (filters.queue !== 'attention') return filtered;
-  const priority = row => attentionReasons(row, appeals).reduce((sum, reason) => sum + ({ gross: 4, review: 2, appeal: 1 }[reason] || 0), 0);
+  const priority = row => attentionReasons(row, appeals).reduce((sum, reason) => sum + ({ error: 8, gross: 4, review: 2, appeal: 1 }[reason] || 0), 0);
   return filtered.sort((a, b) => priority(b) - priority(a));
 }
 
@@ -79,4 +82,9 @@ export function reviewExcerpt(record, item, neighborCount = 1) {
     invalidEvidence,
     firstTurn: anchors.size ? Math.min(...anchors) : null,
   };
+}
+
+/** Retry only explicit failures; pending, missing and successful evaluations are preserved. */
+export function failedDialogIds(rows) {
+  return [...new Set(rows.filter(row => row.status === 'error' && typeof row.conversation_id === 'string' && row.conversation_id.trim()).map(row => row.conversation_id))];
 }

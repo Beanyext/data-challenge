@@ -452,6 +452,10 @@ export function createDemoApi({ storage } = {}) {
       const shown = copy(job); delete shown.pending_evaluations; return shown;
     }),
     getEvaluation: id => accept(() => ({ ...find('evaluations', id), appeals: state.appeals.filter(a => a.evaluation_id === id) })),
+    listEvaluations: id => accept(() => {
+      find('dialogs', id);
+      return state.evaluations.filter(e => e.conversation_id === id).slice().reverse().map(e => ({ id:e.id, status:e.error?'error':'done', checklist_id:e.checklist_id, checklist_version:e.checklist_version, total:e.total ?? null, original_total:e.original_total ?? null, gross_error:e.gross_error ?? false, model:e.model, complete:e.complete !== false && !e.criteria?.some(c => c.answer == null), needs_review_count:e.criteria?.filter(c => c.needs_review).length || 0, created_at:e.evaluated_at ?? null }));
+    }),
     listAppeals: () => accept(() => state.appeals.map(a => {
       const e = find('evaluations', a.evaluation_id);
       const item = e.criteria.find(c => c.criterion_id === a.criterion_id);

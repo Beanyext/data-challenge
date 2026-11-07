@@ -17,6 +17,7 @@ export interface Job { id: string; status: string; completed?: number; total?: n
 export type ScoreSort = 'asc' | 'desc' | null;
 export interface Health { provider?: string; model?: string; estimate?: { based_on?: number; cost_per_dialog_usd?: number | null; seconds_per_dialog?: number | null; workers?: number } | null }
 export interface SavedNotice { checklistId: string; version: number; criteria: number; stale: string[] }
+export interface EvaluationSummary { id: string; status: string; complete?: boolean; needs_review_count?: number; checklist_id?: string | null; checklist_version?: number | null; total?: number | null; original_total?: number | null; gross_error?: boolean | null; model?: string | null; created_at?: string | null; error?: string | null }
 export interface Api {
   demo: boolean;
   listDialogs(): Promise<DialogRecord[]>;
@@ -25,9 +26,10 @@ export interface Api {
   saveChecklist(checklist: Checklist): Promise<Checklist>;
   importDialogs(groupId: string): Promise<{ message?: string }>;
   uploadDialog(file: File): Promise<unknown>;
-  evaluate(ids: string[], checklistId: string): Promise<Job>;
+  evaluate(ids: string[], checklistId: string, options?: {only_failed?: boolean}): Promise<Job>;
   getJob(id: string): Promise<Job>;
   getEvaluation(id: string): Promise<Evaluation>;
+  listEvaluations?(id: string): Promise<EvaluationSummary[]>;
   listAppeals(): Promise<Appeal[]>;
   createAppeal(payload: { evaluation_id: string; criterion_id: string; comment: string }): Promise<Appeal>;
   decideAppeal(id: string, payload: { answer: Answer; reason: string; status: 'confirmed' | 'changed' }): Promise<Appeal>;

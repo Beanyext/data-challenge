@@ -5,7 +5,7 @@ import { EvaluationView } from './result';
 import { ActiveFilters, DensitySwitch, readDensity, SelectionSummary } from './list-tools';
 import { translate as t, translatePlural, formatDecimal } from './i18n';
 import { audioUrl, errorText } from './runtime';
-import { attentionReasons, filterDialogs, hasEvaluation, summarizeDialogs } from '../dialog-utils.mjs';
+import { attentionReasons, failedDialogIds, filterDialogs, hasEvaluation, summarizeDialogs } from '../dialog-utils.mjs';
 import { plainTurnRefs, scoreTone, turnTime } from './text';
 import { ReviewSummary } from './review-tools';
 
@@ -15,7 +15,7 @@ export function StatusBadge({ record }: { record: DialogRecord }) {
 }
 function AttentionBadges({ record, appeals }: { record:DialogRecord; appeals:Appeal[] }) {
   const names:Record<string,string>={gross:'Грубая ошибка',review:'Нужна проверка',appeal:'Апелляция'};
-  const reasons=attentionReasons(record,appeals) as string[];if(record.open_appeals && !reasons.includes('appeal'))reasons.push('appeal');reasons.sort((a,b)=>['gross','appeal','review'].indexOf(a)-['gross','appeal','review'].indexOf(b));
+  const reasons=(attentionReasons(record,appeals) as string[]).filter(reason=>reason!=='error');if(record.open_appeals && !reasons.includes('appeal'))reasons.push('appeal');reasons.sort((a,b)=>['gross','appeal','review'].indexOf(a)-['gross','appeal','review'].indexOf(b));
   return <>{reasons.map(reason=><span key={reason} className={`badge ${reason==='gross'?'badge-red':'badge-amber'}`}>{reason==='gross'&&<Icon name="alert"/>}{t(names[reason])}</span>)}</>;
 }
 export function DialogRows({ rows, selected, appeals=[], onSelect, onOpen }: { rows:DialogRecord[]; selected:Set<string>; appeals?:Appeal[]; onSelect:(id:string,checked:boolean)=>void; onOpen:(id:string)=>void }) {
@@ -31,12 +31,13 @@ export function DialogRows({ rows, selected, appeals=[], onSelect, onOpen }: { r
 
 export interface DialogsWorkspaceProps {
   rows:DialogRecord[]; appeals:Appeal[]; state:ListState; onState:(next:ListState)=>void; busy:boolean;
-  onEvaluate:(ids:string[])=>void; onOpenDialog:(id:string)=>void; onImport:()=>void; onUpload:()=>void; onSubmission:()=>void;
+  onEvaluate:(ids:string[])=>void; onRetryFailed?:(ids:string[])=>void; onOpenDialog:(id:string)=>void; onImport:()=>void; onUpload:()=>void; onSubmission:()=>void;
 }
-export function DialogsWorkspace({ rows, appeals, state, onState, busy, onEvaluate, onOpenDialog, onImport, onUpload, onSubmission }: DialogsWorkspaceProps) {
+export function DialogsWorkspace({ rows, appeals, state, onState, busy, onEvaluate, onRetryFailed, onOpenDialog, onImport, onUpload, onSubmission }: DialogsWorkspaceProps) {
   const [density,setDensity]=useState(readDensity);
   const selectAll=useRef<HTMLInputElement>(null);
   const visible=filterDialogs(rows,{...state.filters,queue:state.queue},appeals) as DialogRecord[];
+  const failed=failedDialogIds(visible) as string[];
   const summary=summarizeDialogs(state.summaryScope==='all'?rows:visible,appeals);
   const attention=rows.filter(row=>(attentionReasons(row,appeals) as string[]).length>0).length;
   const visibleIds=new Set(visible.map(row=>row.conversation_id));
@@ -58,9 +59,9 @@ export function DialogsWorkspace({ rows, appeals, state, onState, busy, onEvalua
       <div className="filters"><label className="search-field"><span className="filter-label">{t('Поиск диалога')}</span><span className="search-input"><span aria-hidden="true"><Icon name="search"/></span><input id="search-dialogs" type="search" placeholder={t('Найти по ID или содержимому')} value={state.filters.query} onChange={event=>setFilter('query',event.target.value)}/></span></label>
         <label><span className="filter-label">{t('Канал')}</span><select data-filter="channel" value={state.filters.channel} onChange={event=>setFilter('channel',event.target.value)}><option value="">{t('Все каналы')}</option><option value="agent chat">{t('Чаты')}</option><option value="voice call">{t('Звонки')}</option></select></label>
         <label><span className="filter-label">{t('Язык')}</span><select data-filter="language" value={state.filters.language} onChange={event=>setFilter('language',event.target.value)}><option value="">{t('Все языки')}</option><option value="RU">{t('Русский')}</option><option value="KZ">{t('Қазақша')}</option><option value="EN">{t('English')}</option></select></label>
-        <label><span className="filter-label">{t('Статус оценки')}</span><select data-filter="status" value={state.filters.status} onChange={event=>setFilter('status',event.target.value)}><option value="">{t('Все статусы')}</option><option value="completed">{t('С оценкой')}</option><option value="pending">{t('Без оценки')}</option><option value="gross">{t('Грубая ошибка')}</option><option value="review">{t('Нужна проверка')}</option><option value="appeal">{t('Открытая апелляция')}</option></select></label>
+        <label><span className="filter-label">{t('Статус оценки')}</span><select data-filter="status" value={state.filters.status} onChange={event=>setFilter('status',event.target.value)}><option value="">{t('Все статусы')}</option><option value="error">{t('Ошибка оценки')}</option><option value="completed">{t('С оценкой')}</option><option value="pending">{t('Без оценки')}</option><option value="gross">{t('Грубая ошибка')}</option><option value="review">{t('Нужна проверка')}</option><option value="appeal">{t('Открытая апелляция')}</option></select></label>
       </div><ActiveFilters filters={state.filters} onRemove={key=>setFilter(key,'')} onReset={resetFilters}/>
-      <div className="list-toolbar"><SelectionSummary count={state.selected.size} onClear={()=>onState({...state,selected:new Set()})}/><button id="evaluate-selected" className="btn btn-primary" data-action="evaluate-selected" disabled={busy||!state.selected.size} onClick={()=>{if(!busy&&state.selected.size)onEvaluate([...state.selected]);}}>{state.selected.size?t('Оценить выбранные ({count})',{count:state.selected.size}):t('Оценить выбранные')} <Icon name="arrow-right"/></button></div>
+      <div className="list-toolbar"><SelectionSummary count={state.selected.size} onClear={()=>onState({...state,selected:new Set()})}/><div className="actions"><button className="btn" data-action="retry-failed" disabled={busy||!failed.length} title={t('Повторяются только ошибки текущей выборки. Успешные оценки сохраняются.')} onClick={()=>{if(!busy&&failed.length)(onRetryFailed || onEvaluate)(failed);}}>{t('Повторить ошибочные ({count})',{count:failed.length})}</button><button id="evaluate-selected" className="btn btn-primary" data-action="evaluate-selected" disabled={busy||!state.selected.size} onClick={()=>{if(!busy&&state.selected.size)onEvaluate([...state.selected]);}}>{state.selected.size?t('Оценить выбранные ({count})',{count:state.selected.size}):t('Оценить выбранные')} <Icon name="arrow-right"/></button></div></div>
       <div className="table-scroll" role="region" aria-label={t('Список диалогов')} tabIndex={0}><table><thead><tr><th data-select-label={t('Выбрать все диалоги')}><input ref={selectAll} id="select-all" type="checkbox" aria-label={t('Выбрать все видимые диалоги')} checked={checked} onChange={event=>selectVisible(event.target.checked)}/></th><th>{t('Диалог')}</th><th>{t('Канал')}</th><th>{t('Язык')}</th><th>{t('Статус')}</th><th>{t('Балл')}</th><th><span className="sr-only">{t('Открыть')}</span></th></tr></thead><tbody id="dialog-rows"><DialogRows rows={visible} selected={state.selected} appeals={appeals} onSelect={select} onOpen={onOpenDialog}/></tbody></table></div>
       <div id="list-empty" hidden={visible.length>0}>{rows.length?<EmptyState title={t('Ничего не найдено')} text={t('Измените запрос, очередь или сбросьте фильтры.')} actions={<button className="btn" data-action="reset-filters" onClick={resetFilters}>{t('Сбросить фильтры')}</button>}/>:<EmptyState title={t('Добавьте первый диалог')} text={t('Импортируйте набор по group_id или загрузите транскрипт в JSON.')} actions={<><button className="btn btn-primary" data-action="import" onClick={onImport}>{t('Импорт набора')}</button><button className="btn" data-action="upload" onClick={onUpload}>{t('Загрузить JSON')}</button></>}/>}</div>
       <div className="table-foot"><span id="visible-count" aria-live="polite">{t('Показано {visible} из {total}',{visible:visible.length,total:rows.length})}{hiddenSelected>0?` · ${t('Выбрано вне фильтра: {count}',{count:hiddenSelected})}`:''}</span><span>{t(state.queue==='attention'?'Приоритет: грубые ошибки, проверка, апелляции':'Оценка по выбранному чек-листу')}</span></div>
