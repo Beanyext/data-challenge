@@ -12,6 +12,7 @@ models/
 *.ipynb
 
 # Окружение и служебные файлы
+.claude/settings.local.json
 .venv/
 __pycache__/
 .pytest_cache/
