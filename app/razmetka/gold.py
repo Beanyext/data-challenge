@@ -14,6 +14,9 @@ from pathlib import Path
 from app.scoring import ScoringError, normalize_answer
 
 DRAFT_SOURCES = ("none", "model")
+# Кто размечал: человек или ИИ-помощник. Разметка ИИ честно помечается: от неё зависит,
+# как называть цифру точности на защите.
+LABELERS = ("human", "assistant")
 
 
 def new_gold(checklist: dict, split: dict, seed: int) -> dict:
@@ -68,11 +71,15 @@ def clean_label(checklist: dict, body: dict) -> dict:
     draft = body.get("draft") or "none"
     if draft not in DRAFT_SOURCES:
         raise ScoringError(f"draft должен быть одним из {DRAFT_SOURCES}")
+    by = body.get("by") or "human"
+    if by not in LABELERS:
+        raise ScoringError(f"by должен быть одним из {LABELERS}")
     order = list(criteria)
     return {
         "answers": {cid: answers[cid] for cid in order if cid in answers},
         "unsure": [cid for cid in order if cid in set(unsure)],
         "draft": draft,
+        "by": by,
         "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
 

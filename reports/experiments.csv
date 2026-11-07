@@ -1,1 +1,2 @@
 when,git,name,model,metric,mean,std,split,folds,rows,features,seconds
+2026-11-07T18:04:19,4701658,"base: opus-5-5 effort high, чек-лист v1",claude-opus-5-5,criterion_agreement,0.9583,,tune,,120,,
