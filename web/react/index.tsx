@@ -10,6 +10,8 @@ import type { DialogRecord, Scale, ScoreSort, Health, SavedNotice } from './type
 import { translate as t, localizeMessage, localizeShell, reloadInLanguage, type Locale } from './i18n';
 import { LanguageSwitcher } from './language-switcher';
 import { FocusToggle } from './review-tools';
+import { AcademyApp } from './academy/AcademyApp';
+export { canLeaveAcademy, canReloadAcademy } from './academy/AcademyApp';
 import { ActiveFilters, SelectionSummary } from './list-tools';
 import type { Filters } from './types';
 export { translate, formatNumber, localizeMessage, getLocale } from './i18n';
@@ -50,6 +52,7 @@ export const ui = {
     } }).catch(() => { failedReload(); return false; })}/>);
   },
   loading: () => page(<LoadingView/>, true),
+  academy: (props: ComponentProps<typeof AcademyApp>) => page(<AcademyApp {...props}/>),
   error: (message: string) => page(<ErrorView message={localizeMessage(message)}/>),
   dialogs: (props: ComponentProps<typeof DialogsView>) => page(<DialogsView {...props}/>),
   dialog: (props: ComponentProps<typeof DialogView>) => page(<DialogView {...props}/>),

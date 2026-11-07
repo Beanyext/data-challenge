@@ -1,4 +1,7 @@
 export const commonMessages: Record<string, { en: string; kk: string }> = {
+  'Не удалось сохранить прогресс Academy. Смена языка отменена.': { en: 'Academy progress could not be saved. Language change cancelled.', kk: 'Academy прогресін сақтау мүмкін болмады. Тілді ауыстыру тоқтатылды.' },
+  'Академия': { en: 'Academy', kk: 'Академия' },
+  'Тренировка оператора': { en: 'Operator training', kk: 'Оператор жаттығуы' },
   'Выбрать все диалоги': { en: 'Select all conversations', kk: 'Барлық диалогтарды таңдау' },
   'Не удалось обновить страницу. Повторите выбор языка.': { en: 'Could not reload the page. Try selecting the language again.', kk: 'Бетті қайта жүктеу мүмкін болмады. Тілді қайта таңдап көріңіз.' },
   'Да': { en: 'Yes', kk: 'Иә' }, 'Нет': { en: 'No', kk: 'Жоқ' },

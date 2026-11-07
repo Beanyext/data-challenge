@@ -1,6 +1,6 @@
 import { createApi } from './api.mjs';
 import { hydrateIcons } from './icons.mjs';
-import { ui, translate as t, formatNumber, localizeMessage, getLocale } from './react-ui.js';
+import { ui, translate as t, formatNumber, localizeMessage, getLocale, canLeaveAcademy, canReloadAcademy } from './react-ui.js';
 import { storeLanguageDraft, takeLanguageDraft, captureFormDrafts, restoreFormDrafts } from './language-draft.mjs';
 
 hydrateIcons();
@@ -16,6 +16,8 @@ const config = window.CQA_CONFIG || {};
 const S = { demo:new URLSearchParams(location.search).get('demo') === '1' || (saved.demo ?? config.demo ?? false), baseUrl:saved.baseUrl ?? config.apiBase ?? '/api', rows:[], checklists:[], appeals:[], selected:new Set(), filters:{query:'', language:'', channel:'', status:''}, dialog:null, evaluation:null, audio:null, editor:null, criterionIndex:0, dirty:false, busy:false, appealFilter:'open', sort:null, savedNotice:null, pendingTurn:null };
 let api;
 let languageReload = false, currentModal = null;
+let acceptedHash = location.hash;
+let navigationRequest = 0;
 let languageDraft = takeLanguageDraft(getLocale(), location.hash);
 if (languageDraft) {
   S.filters = languageDraft.filters;
@@ -25,6 +27,7 @@ if (languageDraft) {
   if (languageDraft.editor) { S.editor = languageDraft.editor; S.dirty = true; }
 }
 function prepareLanguageReload(locale) {
+  if (!canReloadAcademy()) { notify('Не удалось сохранить прогресс Academy. Смена языка отменена.', true); return false; }
   const draft = { locale, route:location.hash, filters:S.filters, selected:[...S.selected], editor:S.dirty?S.editor:null, checklistId:S.editor?.id, criterionIndex:S.criterionIndex, appealFilter:S.appealFilter, modal:modal.open?currentModal:null, forms:captureFormDrafts(), scrollY:window.scrollY };
   if (!storeLanguageDraft(draft)) { notify('Не удалось сохранить незавершённый ввод. Смена языка отменена.',true); return false; }
   languageReload = true;
@@ -77,10 +80,20 @@ function skeleton() { ui.loading(); }
 function showError(e) { ui.error(errorText(e)); }
 async function loadRoute() {
   const revision = ++routeRevision;
-  const [page, id] = route();
+  const [page, id, detail, mode] = route();
+  document.documentElement.classList.toggle('academy-page', page === 'academy');
+  $('#demo-banner').hidden = page === 'academy' || !S.demo;
   document.querySelectorAll('[data-nav]').forEach(a => a.setAttribute('aria-current', a.dataset.nav === (page === 'dialog' ? 'dialogs' : page || 'dialogs') ? 'page' : 'false'));
-  $('#breadcrumb').textContent = t({dialogs:'Диалоги',dialog:'Карточка диалога',checklists:'Чек-листы',appeals:'Апелляции'}[page] || 'Диалоги');
+  $('#breadcrumb').textContent = t({dialogs:'Диалоги',dialog:'Карточка диалога',checklists:'Чек-листы',appeals:'Апелляции',academy:'Академия'}[page] || 'Диалоги');
   document.title = `CQA · ${$('#breadcrumb').textContent}`;
+  if (page === 'academy') {
+    // The academy is fully local, including on a production API connection.
+    // Do not list dialogs, fetch evaluations or construct a model request here.
+    const trainingMode = ['story','quick','daily','mistakes','boss'].includes(mode) ? mode : 'story';
+    ui.academy({ missionId: id === 'mission' ? (detail || '__unknown__') : id && !['result','missions','history'].includes(id) ? '__unknown__' : undefined, resultId: id === 'result' ? (detail || '__unknown__') : undefined, mode: trainingMode, initialTab: id === 'missions' ? 'missions' : id === 'history' ? 'analytics' : 'overview' });
+    await restoreLanguageView();
+    return;
+  }
   skeleton();
   try {
     const [rows, checklists, appeals] = await Promise.all([api.listDialogs(), api.listChecklists(), api.listAppeals()]);
@@ -352,6 +365,15 @@ document.addEventListener('submit',async event=>{
   }catch(e){notify(errorText(e),true);}finally{busyButton(button,false);}
 });
 window.addEventListener('hashchange',async()=>{
+  const request = ++navigationRequest;
+  const nextHash = location.hash;
+  const allowed = await canLeaveAcademy(nextHash);
+  if (request !== navigationRequest) return;
+  if (!allowed) {
+    history.replaceState(null, '', `${location.pathname}${location.search}${acceptedHash}`);
+    return;
+  }
+  acceptedHash = nextHash;
   window.scrollTo({top:0});await loadRoute();main.focus({preventScroll:true});
   // A turn number in an appeal opens the conversation at that message.
   const turn=S.pendingTurn;S.pendingTurn=null;
@@ -365,5 +387,5 @@ function showFragmentTurn(appealId, turn) {
   row.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'nearest'});
   row.focus({preventScroll:true});
 }
-window.addEventListener('beforeunload',event=>{if(S.dirty&&!languageReload){event.preventDefault();event.returnValue='';}});
+window.addEventListener('beforeunload',event=>{if((S.dirty&&!languageReload)||!canReloadAcademy()){event.preventDefault();event.returnValue='';}});
 try{ui.language(prepareLanguageReload,()=>{languageReload=false;notify('Не удалось обновить страницу. Повторите выбор языка.',true);});connect();loadRoute();let active;try{active=JSON.parse(sessionStorage.getItem('cqa-active-job')||'null');}catch{/* Ignore malformed browser state. */}if(active?.id&&active.baseUrl===S.baseUrl&&active.demo===S.demo)pollJob(active.id);}catch(e){showError(e);}
