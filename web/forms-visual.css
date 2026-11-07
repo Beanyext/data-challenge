@@ -1,0 +1,155 @@
+/* Presentation only: existing form fields, handlers and server contracts stay intact. */
+@layer forms {
+  .checklist-toolbar {
+    align-items: end;
+    padding: 20px 24px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+  .checklist-toolbar .weight-total {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-height: 44px;
+    padding: 0 18px;
+    border-left: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  .checklist-toolbar > label { min-width: 0; }
+  .checklist-toolbar select { min-width: 0; width: 100%; }
+  .checklist-toolbar .weight-total span { color: var(--muted); font-size: 12px; }
+  .checklist-toolbar .weight-total strong { font-size: 24px; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+  .checklist-toolbar > .badge { align-self: center; margin-top: 20px; }
+  .checklist-workbench { align-items: start; }
+  .checklist-navigation .panel-heading { padding: 20px; }
+  .checklist-navigation .panel-heading h2 { font-size: 15px; }
+  .checklist-navigation .panel-body { padding: 4px 16px 18px; }
+  .checklist-navigation .panel-body > .btn { width: 100%; }
+  .checklist-navigation .editor-item { align-items: flex-start; border: 1px solid transparent; }
+  .checklist-navigation .editor-item > span:last-child { min-width: 0; }
+  .checklist-navigation .editor-item strong { line-height: 1.5; overflow-wrap: anywhere; }
+  .checklist-navigation .editor-item small { line-height: 1.6; margin-top: 5px; }
+  .checklist-navigation .editor-item.active { background: #edf7f3; border-color: #d1e9df; box-shadow: inset 3px 0 #087f5b; }
+  .checklist-navigation .editor-index { min-width: 24px; padding-top: 2px; color: #64776e; font-variant-numeric: tabular-nums; }
+  .checklist-navigation .active .editor-index { color: #087f5b; font-weight: 700; }
+  .checklist-configuration { min-width: 0; }
+  .checklist-configuration > .panel-body { padding: 26px; }
+  .checklist-name { padding-bottom: 25px; border-bottom: 1px solid var(--line); margin-bottom: 25px; }
+  .checklist-configuration .editor-title-row { align-items: center; gap: 16px; margin-bottom: 28px; }
+  .editor-eyebrow { display: block; color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: .045em; line-height: 1.6; overflow-wrap: anywhere; }
+  .checklist-configuration .editor-title-row h2 { margin-top: 5px; font-size: 22px; letter-spacing: -.035em; }
+  .editor-groups { display: grid; gap: 26px; }
+  .editor-fieldset { min-width: 0; margin: 0; padding: 20px; border: 1px solid var(--line); border-radius: 12px; }
+  .editor-fieldset legend { padding: 0 8px; margin-left: -8px; font-size: 14px; font-weight: 650; }
+  .editor-step { display: inline-grid; place-items: center; width: 26px; height: 26px; margin-right: 8px; border: 1px solid #d5e9e0; border-radius: 7px; background: #f0f8f4; color: #087f5b; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .editor-fieldset .field-grid { gap: 20px 18px; }
+  .editor-fieldset .field-grid > *, .editor-scale > * { min-width: 0; }
+  .editor-help { display: block; margin-top: 8px; color: var(--muted); font-size: 12px; line-height: 1.6; font-weight: 400; }
+  .editor-fieldset textarea[data-criterion="description"] { min-height: 120px; }
+  .editor-fieldset textarea[data-criterion="notes"] { min-height: 96px; }
+  .editor-scale { display: grid; grid-template-columns: minmax(0,1.3fr) minmax(180px,.85fr); align-items: start; gap: 18px; }
+  .editor-scale textarea { font-family: ui-monospace, Consolas, monospace; font-size: 13px; line-height: 1.75; }
+  .editor-scale-guide { padding: 16px; border: 1px solid #e2e8e5; border-radius: 9px; background: #f7faf8; margin-top: 26px; }
+  .editor-scale-guide table { border-collapse: collapse; width: 100%; min-width: 0; table-layout: fixed; text-align: left; font-size: 12px; }
+  .editor-scale-guide caption { text-align: left; color: var(--ink); font-size: 12px; font-weight: 650; margin-bottom: 12px; }
+  .editor-scale-guide th, .editor-scale-guide td { padding: 8px 4px; border-bottom: 1px solid #e0e8e3; white-space: normal; overflow-wrap: anywhere; }
+  .editor-scale-guide th { background: transparent; color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: .025em; }
+  .editor-scale-guide th:first-child, .editor-scale-guide td:first-child { width: 50px; padding-left: 0; font-variant-numeric: tabular-nums; }
+  .editor-scale-guide tbody tr:last-child td { border-bottom: 0; }
+  .editor-scale-guide p { margin-top: 12px; color: var(--muted); font-size: 11px; line-height: 1.65; }
+  .editor-scale-guide code { color: #35564a; font-size: 13px; font-weight: 600; }
+  .scale-preview-empty strong { color: var(--ink); font-size: 12px; font-weight: 650; }
+  .scale-preview-incomplete { color: #86551c; font-size: 11px; font-weight: 400; }
+  .editor-fieldset .editor-option { display: flex; align-items: flex-start; gap: 12px; padding: 16px; border: 1px solid #dde6e1; border-radius: 9px; background: #f8faf9; }
+  .editor-option input { margin: 3px 0 0; }
+  .editor-option > span:not(.badge) { flex: 1; min-width: 0; }
+  .editor-option strong { display: block; font-size: 13px; line-height: 1.5; }
+  .editor-option small { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; font-weight: 400; line-height: 1.55; }
+  .editor-option .editor-neutral { background: #edf0ef; color: #5d6963; border: 1px solid #dce3df; margin-top: 1px; }
+  .editor-option-critical:has(input:checked) { border-color: #edcec9; background: #fcf6f4; }
+  .editor-option-critical:has(input:checked) strong { color: #9d4134; }
+  .checklist-configuration #editor-errors:not(:empty) { margin-top: 22px; }
+  .appeal-queue .appeal-card { grid-template-columns: minmax(0,1fr) auto; padding: 26px; gap: 24px; }
+  .appeal-content { min-width: 0; }
+  .appeal-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+  .appeal-meta > span { overflow-wrap: anywhere; min-width: 0; }
+  .appeal-queue .appeal-card h3 { margin-top: 14px; font-size: 17px; }
+  .appeal-perspectives { display: grid; gap: 14px; margin-top: 20px; }
+  .appeal-perspectives.has-decision { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .appeal-statement { padding: 18px; border: 1px solid #e2e8e5; border-radius: 10px; background: #f8faf9; min-width: 0; }
+  .appeal-statement h4 { margin: 0; color: #64746b; font-size: 11px; font-weight: 650; letter-spacing: .035em; }
+  .appeal-queue .appeal-statement p { margin-top: 10px; font-size: 13px; line-height: 1.75; white-space: pre-wrap; }
+  .appeal-decision { border-color: #cfe5da; background: #f0f8f4; }
+  .appeal-decision h4 { color: #267153; }
+  .appeal-answer { display: block; margin-top: 12px; color: #244a3c; font-size: 14px; font-weight: 650; }
+  .appeal-actions { justify-content: flex-end; }
+  .appeal-queue .review-form { padding-top: 24px; }
+  .appeal-review-layout { grid-template-columns: minmax(0,.8fr) minmax(0,1.2fr); align-items: start; gap: 28px; }
+  .appeal-current { padding: 22px; background: #f7f9f8; border: 1px solid #e0e7e3; border-radius: 11px; min-width: 0; }
+  .appeal-current h4 { margin: 10px 0 18px; font-size: 15px; font-weight: 650; line-height: 1.55; overflow-wrap: anywhere; }
+  .appeal-current-answer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 0; border-top: 1px solid #dfe7e2; border-bottom: 1px solid #dfe7e2; }
+  .appeal-current-answer span { color: var(--muted); font-size: 12px; }
+  .appeal-current-answer strong { font-size: 18px; color: #243d32; white-space: nowrap; }
+  .appeal-queue .appeal-current p { margin-top: 16px; line-height: 1.75; }
+  .appeal-current .text-btn { display: inline-flex; align-items: center; gap: 7px; margin-top: 20px; padding: 0; text-align: left; line-height: 1.6; }
+  .appeal-current .text-btn .ui-icon { flex-shrink: 0; }
+  .appeal-review-fields { min-width: 0; gap: 20px; }
+  .appeal-review-choice { margin: 0; padding: 0; border: 0; min-width: 0; }
+  .appeal-review-choice legend { padding: 0; margin-bottom: 13px; font-size: 16px; font-weight: 650; }
+  .appeal-review-choice .radio-row { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+  .appeal-review-choice .radio-row label { align-items: flex-start; gap: 9px; padding: 14px; border: 1px solid var(--line); border-radius: 9px; font-size: 12px; line-height: 1.55; }
+  .appeal-review-choice .radio-row label:has(input:checked) { border-color: #69a991; background: #eff8f3; color: #1b664a; }
+  .appeal-review-choice input[type="radio"] { margin: 1px 0 0; }
+  .appeal-review-fields select:disabled { background: #f1f4f2; color: #637168; opacity: 1; }
+  .appeal-review-fields textarea { min-height: 125px; }
+  .appeal-review-actions { padding-top: 4px; gap: 10px; }
+  @media (max-width: 1200px) {
+    .editor-scale { grid-template-columns: minmax(0,1fr); }
+    .editor-scale-guide { margin-top: 0; }
+    .appeal-queue .appeal-card { grid-template-columns: minmax(0,1fr); gap: 18px; }
+    .appeal-actions { justify-content: flex-start; }
+  }
+  @media (max-width: 900px) {
+    .checklist-toolbar { flex-wrap: wrap; }
+    .checklist-toolbar > label { flex-basis: 100%; }
+    .checklist-toolbar > .badge { margin-top: 0; }
+    .checklist-toolbar .weight-total { border-left: 0; margin-left: 0; padding-left: 0; }
+    .checklist-configuration > .panel-body { padding: 22px; }
+    .editor-fieldset { padding: 18px 16px; }
+    .checklist-workbench .field-grid { grid-template-columns: minmax(0,1fr); }
+    .appeal-review-layout { grid-template-columns: minmax(0,1fr); gap: 22px; }
+    .appeal-perspectives.has-decision { grid-template-columns: minmax(0,1fr); }
+    .checklist-toolbar .weight-total { padding: 0 12px; gap: 9px; }
+  }
+  @media (max-width: 560px) {
+    .checklist-toolbar { padding: 18px; gap: 14px; }
+    .checklist-toolbar .weight-total { padding: 0; border: 0; min-height: 32px; margin-left: 0; }
+    .checklist-toolbar > .badge { margin-top: 0; margin-left: auto; }
+    .checklist-workbench .editor-list { padding: 10px; max-height: 160px; }
+    .checklist-workbench .editor-item { flex-shrink: 0; width: 200px; min-width: 200px; }
+    .checklist-navigation .panel-heading { padding: 16px 18px; }
+    .checklist-navigation .panel-body { padding: 6px 18px 18px; }
+    .checklist-configuration > .panel-body { padding: 20px 16px; }
+    .checklist-name { padding-bottom: 20px; margin-bottom: 20px; }
+    .checklist-configuration .editor-title-row { align-items: flex-start; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+    .checklist-configuration .editor-title-row .btn { padding: 7px 0; }
+    .editor-groups { gap: 22px; }
+    .editor-fieldset { padding: 16px 12px; }
+    .editor-fieldset legend { font-size: 13px; }
+    .editor-fieldset .field-grid { gap: 18px; }
+    .editor-fieldset .editor-option { padding: 13px 10px; gap: 9px; flex-wrap: wrap; }
+    .editor-option .editor-neutral { margin-left: 26px; }
+    .editor-fieldset input:not([type="checkbox"]), .editor-fieldset select, .editor-fieldset textarea, .checklist-name input, .checklist-toolbar select, .appeal-review-fields select, .appeal-review-fields textarea { font-size: 16px; }
+    .editor-scale-guide { padding: 13px; }
+    .appeal-queue .appeal-card { display: grid; padding: 20px 16px; }
+    .appeal-queue .appeal-card h3 { font-size: 16px; }
+    .appeal-statement { padding: 16px; }
+    .appeal-actions > .btn { flex: 1 1 auto; }
+    .appeal-current { padding: 18px; }
+    .appeal-current-answer { flex-wrap: wrap; }
+    .appeal-review-choice .radio-row { grid-template-columns: minmax(0,1fr); }
+    .appeal-review-choice .radio-row label { padding: 14px; font-size: 13px; }
+    .appeal-review-actions > .btn { flex: 1 1 auto; }
+  }
+}
