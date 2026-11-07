@@ -1,0 +1,128 @@
+/* Interaction details for the React presentation layer; no data or layout state. */
+@layer polish {
+  .react-surface { display: contents; }
+  .toast { display: flex; align-items: flex-start; gap: 12px; }
+  .toast-symbol { display: inline-flex; flex-shrink: 0; padding-top: 2px; }
+  :root {
+    --motion-fast: 140ms;
+    --motion-smooth: 220ms;
+    --motion-ease: cubic-bezier(.2,.7,.2,1);
+  }
+
+  .stat { box-shadow: 0 3px 12px rgb(24 58 40 / 3%); }
+  .stat::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 24px;
+    width: 32px;
+    height: 2px;
+    background: #c9d9cf;
+    border-radius: 2px 2px 0 0;
+  }
+  .stat:has(.green)::after { background: #20976b; }
+  .stat:has(.red)::after { background: #b45e52; }
+  .stat-label { padding-right: 38px; }
+  .stat-icon {
+    width: 31px;
+    height: 31px;
+    top: 16px;
+    right: 17px;
+    border: 1px solid #e4ebe6;
+    border-radius: 9px;
+    background: #f7faf8;
+    color: #597365;
+  }
+  .stat-icon .ui-icon { width: 17px; height: 17px; }
+  .stat:has(.green) .stat-icon { color: #137752; background: #eaf5ee; border-color: #d5e9dc; }
+  .stat:has(.red) .stat-icon { background: #fff3f0; border-color: #efdcd5; }
+  .stat-value, .score-cell, .result-score { font-variant-numeric: tabular-nums; }
+
+  .btn, .icon-btn, .evidence-link {
+    transition: background-color var(--motion-fast), border-color var(--motion-fast),
+      color var(--motion-fast), box-shadow var(--motion-fast),
+      transform var(--motion-fast) var(--motion-ease);
+  }
+  .btn:active:not(:disabled), .icon-btn:active:not(:disabled), .evidence-link:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  .btn-primary:focus-visible, .btn-dark:focus-visible {
+    outline: 2px solid #176f51;
+    outline-offset: 3px;
+    box-shadow: 0 0 0 2px #fff;
+  }
+  .sidebar nav a { transition: background-color var(--motion-fast), box-shadow var(--motion-fast), color var(--motion-fast); }
+  .sidebar nav a:focus-visible { outline: 2px solid #92e5be; outline-offset: 3px; }
+  .sidebar .connection-button:focus-visible { outline-color: #92e5be; }
+
+  .table-scroll tbody tr { transition: background-color var(--motion-fast); }
+  .table-scroll tbody tr:focus-within { background: #f0f8f3; }
+  .table-scroll tbody tr.selected { background: #eaf5ee; }
+  .table-scroll tbody tr.selected td:first-child { box-shadow: inset 3px 0 #319568; }
+  .table-scroll tbody td:last-child .icon-btn { border-color: #e1e9e3; background: #fbfdfb; }
+  .table-scroll tbody tr:focus-within td:last-child .icon-btn { color: #0b724e; border-color: #b8d9c5; background: #fff; }
+  .table-scroll tbody td:last-child .ui-icon { transition: transform var(--motion-fast) var(--motion-ease); }
+  .dialog-title { text-underline-offset: 4px; text-decoration-thickness: 1px; }
+
+  .editor-fieldset, .result-evidence, .appeal-review-choice .radio-row label {
+    transition: border-color var(--motion-smooth), box-shadow var(--motion-smooth), background-color var(--motion-smooth);
+  }
+  .editor-fieldset:focus-within { border-color: #89b69f; box-shadow: 0 0 0 3px rgb(38 126 86 / 5%); }
+  .editor-fieldset:focus-within .editor-step { border-color: #acd4be; color: #075e40; background: #e8f4ec; }
+  .editor-option:focus-within, .appeal-review-choice .radio-row label:focus-within { outline: 2px solid #27855f; outline-offset: 3px; }
+  .result-evidence:focus-within { border-color: #7db393; box-shadow: 0 0 0 3px rgb(38 126 86 / 5%); }
+  .search-field:focus-within > span:not(.sr-only) { color: #087f5b; }
+  .result-rule summary, .result-more-evidence summary {
+    text-underline-offset: 4px;
+    transition: color var(--motion-fast);
+  }
+  .result-rule[open] > summary, .result-more-evidence[open] > summary { color: #245e40; }
+  .result-rule summary::marker, .result-more-evidence summary::marker { color: #668f77; }
+
+  dialog {
+    border-color: #d5e3da;
+    box-shadow: 0 28px 90px rgb(13 42 27 / 22%), 0 5px 18px rgb(13 42 27 / 8%);
+  }
+  dialog::backdrop { background: rgb(17 39 28 / 38%); backdrop-filter: blur(3px); }
+  .modal-heading { align-items: center; padding-bottom: 18px; margin-bottom: 19px; border-bottom: 1px solid #e6ece7; }
+  .modal-heading h2 { line-height: 1.35; }
+  .modal-heading .icon-btn { flex-shrink: 0; background: #f4f7f5; border-color: transparent; }
+  .toast {
+    padding: 16px 20px;
+    border: 1px solid #2d5342;
+    border-left: 4px solid #58c591;
+    background: #173d2c;
+    box-shadow: 0 12px 34px rgb(18 47 31 / 18%);
+    overflow-wrap: anywhere;
+  }
+  .toast.error { background: #8a3630; border-color: #a65b50; border-left-color: #efb0a2; }
+  .empty-symbol { border: 1px solid #d9e9df; box-shadow: 0 0 0 7px #f7faf8; }
+  .empty-state h2 { max-width: 480px; margin-inline: auto; line-height: 1.4; }
+  .empty-state .actions { margin-top: 22px; }
+
+  @media (hover: hover) and (pointer: fine) {
+    .table-scroll tbody tr:hover td:last-child .icon-btn { color: #0b724e; border-color: #b8d9c5; background: #fff; }
+    .table-scroll tbody tr:hover td:last-child .ui-icon { transform: translateX(2px); }
+    .result-rule summary:hover, .result-more-evidence summary:hover { color: #145f3e; text-decoration: underline; }
+  }
+  @media (max-width: 560px) {
+    .stat::after { left: 18px; width: 26px; }
+    .stat-icon { width: 27px; height: 27px; top: 13px; right: 13px; border-radius: 8px; }
+    .stat-icon .ui-icon { width: 15px; height: 15px; }
+    .stat-label { padding-right: 29px; }
+    .table-scroll tbody tr.selected { box-shadow: inset 3px 0 #319568; }
+    .table-scroll tbody tr.selected td:first-child { box-shadow: none; }
+    .modal-heading { gap: 14px; padding-bottom: 15px; margin-bottom: 17px; }
+    .toast { padding: 14px 16px; font-size: 13px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .btn, .icon-btn, .evidence-link, .sidebar nav a, .table-scroll tbody tr,
+    .table-scroll tbody td:last-child .ui-icon, .editor-fieldset, .result-evidence,
+    .appeal-review-choice .radio-row label, .result-rule summary, .result-more-evidence summary {
+      transition: none;
+      transform: none;
+    }
+    .btn:active:not(:disabled), .icon-btn:active:not(:disabled), .evidence-link:active:not(:disabled),
+    .table-scroll tbody tr:hover td:last-child .ui-icon { transform: none; }
+  }
+}

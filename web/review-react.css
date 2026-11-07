@@ -1,0 +1,25 @@
+.react-editor-fieldset { padding:0; margin:0; border:0; min-width:0; }
+.react-editor-fieldset > .editor-layout { margin-top:20px; }
+.checklist-general { margin:24px 0; border:1px solid var(--line); border-radius:8px; padding:14px 16px; }
+.checklist-general summary { cursor:pointer; font-weight:600; }
+.checklist-general[open] summary { margin-bottom:18px; }
+.criterion-editor { margin-top:24px; }
+.react-review-layout { grid-column:1 / -1; }
+.react-review-layout .review-evidence > h3 { margin:0 0 12px; }
+.react-review-layout .review-evidence > h3:not(:first-child) { margin-top:22px; }
+.react-review-layout .review-evidence > .notice, .react-review-layout .review-evidence > p { margin-bottom:14px; }
+.react-review-layout .review-transcript { max-height:490px; overflow:auto; padding:4px; }
+.react-review-layout .turn { scroll-margin:30px; }
+.react-review-layout .review-decision { min-width:0; }
+.react-review-layout .review-decision > label, .react-review-layout .review-decision > fieldset { display:block; margin:18px 0; }
+.react-review-layout .review-decision label > textarea, .react-review-layout .review-decision label > select { margin-top:8px; }
+.react-review-layout .review-decision .radio-row { align-items:flex-start; }
+.react-review-layout .review-decision .radio-row label { display:flex; align-items:center; gap:8px; }
+.react-review-layout .review-decision fieldset:disabled { opacity:.65; }
+.react-appeals .review-form { min-width:0; }
+.react-appeals .appeal-statement p, .react-review-layout .turn p, .diff-item p { overflow-wrap:anywhere; }
+.diff-item .diff-before p, .diff-item .diff-after p { white-space:pre-wrap; }
+.react-review-layout .review-audio { padding:14px 0; }
+.react-review-layout .review-audio audio { display:block; width:100%; margin:10px 0; }
+@media(max-width:1150px) { .react-review-layout { grid-template-columns:minmax(0,1fr); } }
+@media(max-width:560px) { .checklist-general { padding:12px; } .react-review-layout .review-transcript { max-height:400px; } .react-review-layout .review-decision .radio-row { display:grid; } }

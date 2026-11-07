@@ -57,7 +57,7 @@ async (originalPage) => {
     await page.getByRole('button',{name:'Сохранить решение',exact:true}).click();
     await page.getByRole('button',{name:/Все обращения/}).click();
     await page.getByRole('button',{name:'Открыть диалог ↗',exact:true}).click();
-    await page.locator('#criterion-c07 .revision').waitFor();
+    await page.locator('#criterion-c07 .result-revision').waitFor();
     await page.getByRole('link',{name:'Отчёт',exact:true}).click();
     await page.getByRole('heading',{name:'Отчёт о качестве диалога',exact:true}).waitFor();
     check((await page.locator('.quality-report').innerText()).includes('Проверено по исходной реплике'),'Report includes review decision');
@@ -99,7 +99,7 @@ async (originalPage) => {
     await page.locator('[data-filter=status]').selectOption('');
     await page.locator('[data-queue=all]').click();
     await page.getByRole('button',{name:'Открыть demo-voice-001',exact:true}).click();
-    await page.getByRole('button',{name:'Оценить диалог ↗',exact:true}).click();
+    await page.locator('[data-action=evaluate-dialog]').click();
     await page.getByRole('checkbox',{name:/Понимаю, что это учебная/}).check();
     await page.locator('#evaluate-form').getByRole('button',{name:'Оценить диалог',exact:true}).click();
     await page.locator('.result-score').waitFor();

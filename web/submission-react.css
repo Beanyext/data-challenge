@@ -1,0 +1,15 @@
+#submission-page .submission-layout { align-items:start; }
+#submission-form fieldset { display:block; min-width:0; border:0; padding:0; margin:0; }
+#submission-form fieldset:disabled { opacity:.75; }
+#submission-form .field-grid { gap:18px; }
+#submission-form .muted { font-weight:400; line-height:1.55; }
+#submission-form input[type=file] { background:var(--surface); font-size:12px; }
+.submission-result .notice h2 { font-size:15px; }
+.submission-result .actions { margin-top:18px; }
+.report-brand-row { display:flex; justify-content:space-between; align-items:center; gap:20px; margin-bottom:24px; }
+.report-logo { max-width:168px; width:100%; height:auto; }
+.report-full-transcript-screen { padding-top:20px; border-top:1px solid var(--line); }
+.report-full-transcript-screen summary { cursor:pointer; font-weight:600; font-size:14px; }
+.report-full-transcript-print { display:none; }
+@media(max-width:650px) { .report-brand-row { align-items:start; flex-direction:column; gap:12px; } }
+@media print { .report-brand-row { flex-direction:row; align-items:center; margin-bottom:16px; } .report-logo { max-width:145px; } .report-full-transcript-screen { display:none!important; } .report-full-transcript-print { display:block!important; } }

@@ -265,6 +265,24 @@ test('review markers alone require original_criteria; no reconstructed evidence'
   ]) { const input = fixture(); mark(input.entries[0].evaluation); assert.equal(buildSubmission(input).document, null); }
 });
 
+test('unreviewed server DTO metadata is not mistaken for a human revision', () => {
+  for(const originalTotal of [100,null]) {
+    const input=fixture();
+    for(const entry of input.entries) {
+      entry.evaluation.total=100;entry.evaluation.original_total=originalTotal;
+      entry.evaluation.criteria.forEach(item=>{item.original_answer=item.answer;item.decision=null;item.review_reason=null;});
+    }
+    const initial=buildSubmission(input);
+    assert.deepEqual(initial.errors,[]);
+    assert.equal(initial.document.results[0].score.final_score,100);
+    const changed=input.entries[0].evaluation;
+    changed.criteria[0].answer='no';changed.criteria[0].decision={answer:'no',reason:'Вымышленное решение.'};changed.criteria[0].review_reason='Вымышленное решение.';changed.total=90;
+    assert.equal(buildSubmission(input).document,null);
+    assert.ok(buildSubmission(input).errors.some(error=>error.includes('original_criteria')));
+    assert.deepEqual(buildSubmission({...input,source:'final'}).errors,[]);
+  }
+});
+
 test('saved total and saved gross flag must agree; no silent score rewriting', () => {
   for (const value of [99, null, '100', NaN, 100.001]) {
     const input = fixture(); input.entries[0].evaluation.total = value;

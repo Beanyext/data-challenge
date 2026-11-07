@@ -16,6 +16,7 @@ reports/profile_*.md
 # Окружение и служебные файлы
 .claude/settings.local.json
 .venv/
+node_modules/
 __pycache__/
 .pytest_cache/
 .playwright-mcp/

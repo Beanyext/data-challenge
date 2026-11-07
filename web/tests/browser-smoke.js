@@ -32,10 +32,10 @@ async (originalPage) => {
     await page.getByRole('button', { name: 'Сохранить решение', exact: true }).click();
     await page.getByRole('button', { name: /Все обращения/ }).click();
     await page.getByRole('button', { name: 'Открыть диалог ↗', exact: true }).click();
-    await page.locator('#criterion-c07 .revision').waitFor();
-    check((await page.locator('.result-overview').innerText()).includes('Исходная оценка'), 'Original score retained');
+    await page.locator('#criterion-c07 .result-revision').waitFor();
+    check((await page.locator('.result-total-revision').innerText()).includes('Исходная оценка'), 'Original score retained');
     await page.reload();
-    await page.locator('#criterion-c07 .revision').waitFor();
+    await page.locator('#criterion-c07 .result-revision').waitFor();
     check(!await page.evaluate(() => window.__unsafe), 'Escaped user text');
     results.push('evidence, appeal, review, recalculation, reload, XSS text');
 
@@ -51,7 +51,7 @@ async (originalPage) => {
     check((await page.locator('#choose-checklist').innerText()).includes('v2'), 'New checklist version');
     await page.getByRole('link', { name: /Диалоги/ }).click();
     await page.getByRole('button', { name: 'Открыть demo-voice-001', exact: true }).click();
-    await page.getByRole('button', { name: 'Оценить диалог ↗', exact: true }).click();
+    await page.locator('[data-action=evaluate-dialog]').click();
     await page.getByRole('checkbox', { name: /Понимаю, что это учебная/ }).check();
     await page.locator('#evaluate-form').getByRole('button', { name: 'Оценить диалог', exact: true }).click();
     await page.locator('.result-score').waitFor();

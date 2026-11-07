@@ -134,10 +134,14 @@ function checkSnapshot(snapshot, context, errors) {
 }
 
 function reviewed(evaluation) {
+  // The team API includes unchanged original answers and an explicit null decision before any review.
+  const untouchedServerMetadata=Array.isArray(evaluation.criteria) && evaluation.criteria.length>0
+    && (evaluation.original_total==null || evaluation.original_total===evaluation.total)
+    && evaluation.criteria.every(item=>own(item,'decision') && item.decision===null && own(item,'original_answer') && item.original_answer===item.answer && item.review_reason===null);
   return evaluation.reviewed === true || evaluation.revised === true || own(evaluation, 'final_criteria') ||
     Array.isArray(evaluation.appeals) && evaluation.appeals.some(a => a?.decision) ||
-    own(evaluation, 'original_total') && own(evaluation, 'total') && evaluation.original_total !== evaluation.total ||
-    Array.isArray(evaluation.criteria) && evaluation.criteria.some(c => ['original_answer', 'original_evidence', 'original_explanation', 'original_checked_range', 'review_reason', 'revised_answer', 'revised_evidence', 'revised_explanation', 'reviewed_evidence', 'revision', 'review_decision', 'reviewed_at'].some(key => own(c, key)));
+    evaluation.original_total!=null && own(evaluation, 'total') && evaluation.original_total !== evaluation.total ||
+    Array.isArray(evaluation.criteria) && evaluation.criteria.some(c => ['original_answer', 'original_evidence', 'original_explanation', 'original_checked_range', 'review_reason', 'revised_answer', 'revised_evidence', 'revised_explanation', 'reviewed_evidence', 'revision', 'review_decision', 'reviewed_at'].some(key => own(c, key) && !(untouchedServerMetadata && ['original_answer','review_reason'].includes(key))));
 }
 
 function sourceCriteria(evaluation, source, context, errors, warnings) {
@@ -147,10 +151,11 @@ function sourceCriteria(evaluation, source, context, errors, warnings) {
     return null;
   }
   if (source === 'final' && hasReview) warnings.push(`${context}: явно выбрана пересмотренная оценка.`);
+  const hasOriginalTotal=own(evaluation,'original_total') && (hasReview || evaluation.original_total!=null);
   if (source === 'original') return {
     criteria: Array.isArray(evaluation.original_criteria) ? evaluation.original_criteria : evaluation.criteria,
-    hasTotal: own(evaluation, 'original_total') || !hasReview && own(evaluation, 'total'),
-    total: own(evaluation, 'original_total') ? evaluation.original_total : evaluation.total,
+    hasTotal: hasOriginalTotal || !hasReview && own(evaluation, 'total'),
+    total: hasOriginalTotal ? evaluation.original_total : evaluation.total,
   };
   return { criteria: Array.isArray(evaluation.final_criteria) ? evaluation.final_criteria : evaluation.criteria, hasTotal: own(evaluation, 'final_total') || own(evaluation, 'total'), total: own(evaluation, 'final_total') ? evaluation.final_total : evaluation.total };
 }

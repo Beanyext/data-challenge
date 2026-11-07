@@ -15,9 +15,9 @@ async (originalPage) => {
     if (await page.locator('.evidence-links img').count() || await page.evaluate(() => window.__rangeUnsafe)) throw new Error('Range XSS');
     validRange = true;
     await page.reload();
-    await page.getByRole('button', { name: 'Участок 1–1 ↗', exact: true }).click();
+    await page.locator('[data-turn="0"][data-range-end="0"]').click();
     if (await page.locator('.turn.highlight').count() !== 1) throw new Error('Control: valid range must still navigate');
-    await page.getByText('Сервер вернул некорректную ссылку на запись.', { exact: true }).waitFor();
+    await page.getByText('Сервер передал некорректный адрес аудио.', { exact: true }).waitFor();
     const text = await page.locator('#audio-block').innerText();
     if (text.includes('sig') || text.includes('fictional-test-only')) throw new Error('Signed URL leaked');
     return { invalidRangeRejected: true, validRangeNavigates: true, malformedAudioUrlRedacted: true };

@@ -1,0 +1,52 @@
+/* Final layout rules for the unified React application. */
+#root { min-height:100dvh; }
+.modal-fields { border:0; padding:0; margin:0; min-width:0; display:grid; gap:20px; }
+.modal-fields>fieldset { margin:0; }
+.modal-fields .form-actions { margin-top:4px; }
+.startup-error { max-width:640px; margin:10vh auto; padding:24px; }
+.startup-error p { margin:18px 0; }
+.sidebar .brand { flex-wrap:wrap; }
+.sidebar .brand-caption { width:100%; margin:0; font-size:10px; letter-spacing:.04em; color:#c4d9cd; }
+.sidebar .brand-logo { max-width:100%; object-fit:contain; }
+.sidebar .brand-mark { display:none; background:transparent; border-radius:0; }
+.topbar-end { min-width:0; }
+.job-banner { flex-wrap:wrap; }
+.job-banner progress { min-width:120px; }
+.focus-mode .sidebar nav a>span:not(.nav-icon):not(.nav-count) { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
+.notifications .react-surface { display:contents; }
+.notifications .toast { pointer-events:auto; }
+.toast-dismiss { flex:none; min-width:36px; min-height:36px; padding:7px; border:0; background:transparent; color:inherit; }
+.toast-dismiss:hover { background:rgb(255 255 255 / .12); }
+.toast-dismiss:focus-visible { outline:2px solid currentColor; outline-offset:2px; }
+.summary-toolbar label { min-width:0; }
+.page-heading>.actions { flex-wrap:wrap; }
+@media(max-width:850px) {
+  #workspace-tools { display:none; }
+  .focus-mode .sidebar nav a>span:not(.nav-icon):not(.nav-count) { position:static; width:auto; height:auto; margin:0; clip:auto; white-space:normal; }
+}
+@media(min-width:851px) { .focus-mode .sidebar .brand-mark { display:block; } }
+@media(max-width:560px) {
+  .sidebar nav { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .sidebar nav a { min-width:0; }
+  .topbar { padding:10px 16px; }
+  .topbar .mode-label { display:none; }
+  .topbar .topbar-end { gap:8px; }
+  .summary-toolbar { align-items:stretch; }
+  .density-control button,.filter-chip,.clear-filters,.selection-summary .text-btn { min-height:44px; }
+  .toast-dismiss { min-width:44px; min-height:44px; }
+}
+@media print {
+  body:has(.quality-report)>#root { display:block!important; }
+  body:has(.quality-report) #root>.sidebar,
+  body:has(.quality-report) .topbar,
+  body:has(.quality-report) #demo-banner,
+  body:has(.quality-report) #job-banner,
+  body:has(.quality-report) .notifications,
+  body:has(.quality-report) .skip-link,
+  body:has(.quality-report) .print-toolbar,
+  body:has(.quality-report) #upload-file { display:none!important; }
+  body:has(.quality-report) .app-shell { margin:0!important; }
+  body:has(.quality-report) main { margin:0!important; padding:0!important; max-width:none!important; }
+  body:has(.quality-report) main>.react-surface { display:block!important; }
+  body:has(.quality-report) .quality-report { display:block!important; }
+}
