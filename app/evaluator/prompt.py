@@ -68,6 +68,8 @@ def build_system_prompt(checklist: dict) -> str:
     if loose:
         blocks.append("\n".join(_criterion_block(c) for c in loose))
     parts.append("Критерии:\n" + "\n\n".join(blocks))
+    ids = ", ".join(c["id"] for c in checklist["criteria"])
+    parts.append(f"Формат ответа: в массиве criteria ровно по одному элементу на каждый критерий ({ids}), в поле id — номер критерия.")
     return "\n\n".join(parts)
 
 
@@ -84,34 +86,53 @@ def build_user_message(record: dict) -> str:
 
 
 def output_schema(checklist: dict) -> dict:
-    """Схема ответа: допустимые ответы каждого критерия зашиты в enum прямо из настроек."""
+    """Схема ответа: список criteria, по элементу на критерий, все элементы одного вида.
 
-    def item(c: dict) -> dict:
-        return {
-            "type": "object",
-            "properties": {
-                "answer": {"type": "string", "enum": answer_options(c)},
-                "explanation": {"type": "string"},
-                "evidence": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {"turn": {"type": "integer"}, "quote": {"type": "string"}},
-                        "required": ["turn", "quote"],
-                        "additionalProperties": False,
-                    },
-                },
-                "checked_range": {"type": "array", "items": {"type": "integer"}},
-                "na_reason": {"type": "string"},
-            },
-            "required": ["answer", "explanation", "evidence", "checked_range", "na_reason"],
-            "additionalProperties": False,
-        }
-
+    Размер схемы не растёт с числом критериев. Отдельное свойство на каждый критерий
+    на 8 критериях уже не компилируется на стороне API (400 «compiled grammar is too large»),
+    а организаторы на показе добавляют новые. Какой ответ допустим для конкретного критерия
+    и все ли критерии есть, проверяет validate(): при ошибке модель переспрашивается."""
     ids = [c["id"] for c in checklist["criteria"]]
-    return {
+    answers: list[str] = []
+    for c in checklist["criteria"]:
+        answers += [a for a in answer_options(c) if a not in answers]
+    item = {
         "type": "object",
-        "properties": {c["id"]: item(c) for c in checklist["criteria"]},
-        "required": ids,
+        "properties": {
+            "id": {"type": "string", "enum": ids},
+            "answer": {"type": "string", "enum": answers},
+            "explanation": {"type": "string"},
+            "evidence": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {"turn": {"type": "integer"}, "quote": {"type": "string"}},
+                    "required": ["turn", "quote"],
+                    "additionalProperties": False,
+                },
+            },
+            "checked_range": {"type": "array", "items": {"type": "integer"}},
+            "na_reason": {"type": "string"},
+        },
+        "required": ["id", "answer", "explanation", "evidence", "checked_range", "na_reason"],
         "additionalProperties": False,
     }
+    return {
+        "type": "object",
+        "properties": {"criteria": {"type": "array", "items": item}},
+        "required": ["criteria"],
+        "additionalProperties": False,
+    }
+
+
+def answers_by_criterion(raw: object) -> dict:
+    """Ответ модели в виде {id критерия: ответ}. Из списка criteria берётся первый элемент с каждым id.
+
+    Ответ, уже разложенный по критериям (тестовый режим), возвращается как есть."""
+    if isinstance(raw, dict) and isinstance(raw.get("criteria"), list):
+        out: dict = {}
+        for item in raw["criteria"]:
+            if isinstance(item, dict) and isinstance(item.get("id"), str) and item["id"] not in out:
+                out[item["id"]] = item
+        return out
+    return raw if isinstance(raw, dict) else {}
