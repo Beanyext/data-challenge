@@ -30,3 +30,8 @@ tqdm
 
 # Вызов модели Claude для оценки диалогов
 anthropic
+
+# Сервер приложения для интерфейса
+fastapi
+python-multipart
+uvicorn
