@@ -2,6 +2,7 @@ import { createApi } from './api.mjs';
 import { attentionReasons, filterDialogs, summarizeDialogs, reviewExcerpt, dialogTitle, evaluationChecklist } from './dialog-utils.mjs';
 import { compareChecklists, renderChecklistDiff } from './checklist-diff.mjs';
 import { buildReport } from './report.mjs';
+import { createSubmissionUI } from './submission-ui.mjs';
 
 const $ = (s, root = document) => root.querySelector(s);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -18,6 +19,7 @@ try { saved = JSON.parse(localStorage.getItem('cqa-connection') || '{}'); } catc
 const config = window.CQA_CONFIG || {};
 const S = { demo:new URLSearchParams(location.search).get('demo') === '1' || (saved.demo ?? config.demo ?? false), baseUrl:saved.baseUrl ?? config.apiBase ?? '/api', rows:[], checklists:[], appeals:[], selected:new Set(), filters:{query:'', language:'', channel:'', status:''}, dialog:null, evaluation:null, audio:null, editor:null, criterionIndex:0, dirty:false, busy:false, appealFilter:'open', queue:'all', summaryScope:'filtered', editorBase:null, pendingChecklist:null, reviewContexts:new Map(), reviewDrafts:new Map(), savingChecklist:false };
 let api;
+const submissionUI = createSubmissionUI({root:main,getApi:()=>api,isDemo:()=>S.demo,teamName:config.teamName || 'seeusoon',notify});
 function rememberJob(id) {try{if(id)sessionStorage.setItem('cqa-active-job',JSON.stringify({id,baseUrl:S.baseUrl,demo:S.demo}));else sessionStorage.removeItem('cqa-active-job');}catch{/* Jobs still run when browser storage is disabled. */}}
 
 function notify(text, error = false) {
@@ -59,8 +61,10 @@ async function loadRoute() {
   const revision = ++routeRevision;
   const [page, id] = route();
   document.querySelectorAll('[data-nav]').forEach(a => a.setAttribute('aria-current', a.dataset.nav === (['dialog','report'].includes(page) ? 'dialogs' : page || 'dialogs') ? 'page' : 'false'));
-  $('#breadcrumb').textContent = ({dialogs:'Диалоги',dialog:'Карточка диалога',report:'Отчёт',checklists:'Чек-листы',appeals:'Апелляции'}[page] || 'Диалоги');
+  $('#breadcrumb').textContent = ({dialogs:'Диалоги',dialog:'Карточка диалога',report:'Отчёт',checklists:'Чек-листы',appeals:'Апелляции',submission:'Выгрузка'}[page] || 'Диалоги');
   document.title = `CQA · ${$('#breadcrumb').textContent}`;
+  $('#demo-banner').hidden = !S.demo || page==='submission';
+  if(page==='submission'){submissionUI.render();return;}
   skeleton();
   try {
     const [rows, checklists, appeals] = await Promise.all([api.listDialogs(), api.listChecklists(), api.listAppeals()]);
@@ -90,7 +94,7 @@ function queueBadge(row) {
 }
 function renderDialogs() {
   const attention=S.rows.filter(row=>attentionReasons(row,S.appeals).length).length;
-  main.innerHTML = `<div class="page-heading"><div><h1>Диалоги</h1><p>Проверяйте качество работы операторов и обоснования оценок.</p></div><div class="actions"><button class="btn" data-action="import">${icon('download')}Импорт набора</button><button class="btn" data-action="upload">${icon('plus')}Загрузить JSON</button></div></div>
+  main.innerHTML = `<div class="page-heading"><div><h1>Диалоги</h1><p>Проверяйте качество работы операторов и обоснования оценок.</p></div><div class="actions"><a class="btn" href="#submission">Выгрузить для сдачи</a><button class="btn" data-action="import">${icon('download')}Импорт набора</button><button class="btn" data-action="upload">${icon('plus')}Загрузить JSON</button></div></div>
     <div class="summary-toolbar"><p id="summary-caption" class="stats-caption"></p><label>Охват сводки<select id="summary-scope"><option value="filtered" ${S.summaryScope==='filtered'?'selected':''}>Текущая выборка</option><option value="all" ${S.summaryScope==='all'?'selected':''}>Весь набор</option></select></label></div><section id="dialog-summary" class="stats-strip" aria-label="Сводка диалогов"></section>
     <div class="view-tabs queue-tabs" role="group" aria-label="Очередь диалогов"><button class="btn ${S.queue==='all'?'btn-dark':''}" data-queue="all" aria-pressed="${S.queue==='all'}">Все диалоги · ${S.rows.length}</button><button class="btn ${S.queue==='attention'?'btn-dark':''}" data-queue="attention" aria-pressed="${S.queue==='attention'}">Требует внимания · ${attention}</button></div>
     ${S.appeals.some(a=>a.status==='open'&&a.context_unavailable)?'<div class="notice queue-notice">У части апелляций не удалось получить связанный диалог. Они остаются в разделе «Апелляции».</div>':''}

@@ -2,4 +2,5 @@
 window.CQA_CONFIG = {
   apiBase: '/api',
   demo: false,
+  teamName: 'seeusoon',
 };

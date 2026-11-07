@@ -1,0 +1,27 @@
+.submission-layout { display:grid; grid-template-columns:minmax(0, 1.65fr) minmax(250px, 1fr); gap:24px; align-items:start; }
+.submission-layout > *, .submission-layout form, .submission-layout label { min-width:0; }
+#submission-form fieldset { border:0; padding:0; margin:0; min-width:0; }
+#submission-form input[type=file] { width:100%; white-space:normal; padding:12px; font-size:12px; }
+#submission-form input::file-selector-button { border:1px solid var(--line); border-radius:6px; background:var(--surface); color:var(--ink); font:inherit; padding:6px 10px; margin-right:10px; cursor:pointer; }
+#submission-form .btn { margin-top:8px; }
+#submission-progress:empty { display:none; }
+.submission-guide { position:sticky; top:24px; }
+.submission-steps { margin:0; padding-left:22px; }
+.submission-steps li { padding-left:7px; margin-bottom:24px; }
+.submission-steps strong, .submission-steps span { display:block; }
+.submission-steps strong { margin-bottom:7px; font-size:14px; }
+.submission-steps span { font-size:13px; line-height:1.6; color:var(--muted); }
+.submission-steps code { overflow-wrap:anywhere; font-size:12px; color:var(--ink); }
+.submission-result { margin-top:24px; }
+.submission-result .notice { margin-bottom:20px; }
+.submission-result .notice h2 { font-size:15px; margin:0 0 12px; }
+.submission-issues { margin:0; padding-left:20px; max-height:280px; overflow:auto; overflow-wrap:anywhere; }
+.submission-issues li { margin:5px 0; }
+.submission-summary { display:grid; grid-template-columns:1fr 1fr 1.5fr; gap:16px; margin-bottom:20px; }
+.submission-summary span, .submission-summary strong { display:block; }
+.submission-summary strong { margin-top:8px; font-size:24px; overflow-wrap:anywhere; }
+.submission-result p { overflow-wrap:anywhere; }
+.submission-ack { display:flex; align-items:start; gap:10px; margin:20px 0; line-height:1.5; }
+.submission-ack input { flex:none; margin-top:3px; }
+@media(max-width:1150px) { .submission-layout { grid-template-columns:minmax(0, 1fr); } .submission-guide { position:static; } }
+@media(max-width:560px) { .sidebar nav { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); } .sidebar nav a { min-width:0; } .submission-summary { grid-template-columns:1fr 1fr; } .submission-summary > :last-child { grid-column:1 / -1; } }
