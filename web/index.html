@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="./language.css">
   <link rel="stylesheet" href="./workspace.css">
   <link rel="stylesheet" href="./review.css">
+  <link rel="stylesheet" href="./ux.css">
   <link rel="stylesheet" href="./print.css">
   <script src="./config.js"></script>
   <script type="module" src="./app.mjs"></script>
@@ -32,7 +33,7 @@
     <div class="sidebar-bottom"><div class="workspace-signature"><span data-icon="shield"></span><span>Conversation<br><strong>Quality Analytics</strong></span></div><p><span class="prototype-label" data-i18n="Прототип команды">Прототип команды</span><br><span>Data Challenge 2026</span></p><button class="connection-button" data-action="settings"><span class="connection-dot" aria-hidden="true"></span><span id="connection-label">Подключение к серверу</span><span data-icon="settings"></span></button></div>
   </aside>
   <div class="app-shell">
-    <header class="topbar"><div><span class="topbar-parent" data-i18n="Рабочее пространство">Рабочее пространство</span><span class="breadcrumb-sep" aria-hidden="true">/</span><span id="breadcrumb">Диалоги</span></div><div class="topbar-end"><span id="mode-label" class="mode-label">API команды</span><div id="workspace-tools"></div><div id="language-switcher"></div><button class="icon-btn" data-action="settings" aria-label="Настройки подключения" title="Настройки подключения" data-i18n-aria="Настройки подключения" data-i18n-title="Настройки подключения" data-icon="settings"></button><span class="avatar" title="Рабочее пространство без авторизации" data-i18n-title="Рабочее пространство без авторизации" aria-hidden="true">QA</span></div></header>
+    <header class="topbar"><div><span class="topbar-parent" data-i18n="Рабочее пространство">Рабочее пространство</span><span class="breadcrumb-sep" aria-hidden="true">/</span><span id="breadcrumb">Диалоги</span></div><div class="topbar-end"><div id="workspace-tools"></div><div id="language-switcher"></div><button class="icon-btn" data-action="settings" aria-label="Настройки подключения" title="Настройки подключения" data-i18n-aria="Настройки подключения" data-i18n-title="Настройки подключения" data-icon="settings"></button></div></header>
     <div id="demo-banner" class="demo-banner" hidden><span><strong data-i18n="Учебный пример.">Учебный пример.</strong> <span data-i18n="Вымышленные диалоги и оценки, модель не вызывается.">Вымышленные диалоги и оценки, модель не вызывается.</span></span><button data-action="settings"><span data-i18n="Подключить сервер">Подключить сервер</span> <span aria-hidden="true">↗</span></button></div>
     <div id="job-banner" class="job-banner" role="status" hidden></div>
     <main id="main" tabindex="-1"></main>

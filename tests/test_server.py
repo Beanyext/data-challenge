@@ -321,3 +321,96 @@ def test_unknown_things_are_404(client):
     assert client.get("/api/jobs/nope").status_code == 404
     assert client.post("/api/evaluations", json={"conversation_ids": ["nope"], "checklist_id": "freedom-chat"}).status_code == 404
     assert client.post("/api/evaluations", json={"conversation_ids": [], "checklist_id": "freedom-chat"}).status_code == 400
+
+
+# --- поля для интерфейса: номера реплик, краткая причина, время звонка, цена оценки ---
+
+from app.server.views import human_turns, short_reason  # noqa: E402
+
+
+def test_turn_numbers_follow_transcript_and_short_reason():
+    assert human_turns("Основание — реплики [0], [9] и [11].") == "Основание — реплики [1], [10] и [12]."
+    assert human_turns(None) is None
+    text = "Выявление потребности — Нет. Клиент просил помочь с выбором облигаций, но оператор ничего не уточнил. Основание — реплики [9] и [11]."
+    assert short_reason(text, "Выявление потребности") == "Клиент просил помочь с выбором облигаций, но оператор ничего не уточнил."
+    # без вступления «Критерий — ответ.» берётся первая фраза; короткая дополняется второй
+    assert short_reason("Да. Оператор поздоровался по имени клиента [2].", "Установление контакта") == "Да. Оператор поздоровался по имени клиента [3]."
+    assert short_reason("Основание — реплика [4].", "Завершение") == "Основание — реплика [5]."
+
+
+def _finished(c, cid, answers, explanation, provider="anthropic", cost=0.05, seconds=20.0):
+    store = c.app.state.store
+    checklist = store.get_checklist("freedom-chat", 1)
+    ev_id, job_id = f"ev-{cid}", f"job-{cid}"
+    store.create_job(job_id, checklist, [(ev_id, cid)])
+    store.finish_evaluation(ev_id, job_id, {
+        "conversation_id": cid, "provider": provider, "model": "claude-opus-5-5", "cost_usd": cost,
+        "calls": [{"model": "claude-opus-5-5", "seconds": seconds, "cost_usd": cost}],
+        "criteria": [{"criterion_id": k, "answer": v, "explanation": explanation(k), "evidence": [{"turn": 3, "quote": "x"}],
+                      "checked_range": None, "na_reason": None} for k, v in answers.items()],
+    })
+    return ev_id
+
+
+def test_gross_error_reason_and_explanations_in_views(client):
+    upload(client, [chat("g-1")])
+    answers = {"c01": "yes", "c02": "na", "c03": "na", "c04": 15, "c05": "yes", "c06": 7, "c07": "yes", "c08": "yes"}
+    titles = {c["id"]: c["title"] for c in CHECKLIST["criteria"]}
+    ev_id = _finished(client, "g-1", answers,
+                      lambda k: f"{titles[k]} — Да. Оператор предложил перевести деньги ему лично. Основание — реплика [3]." if k == "c08"
+                      else f"{titles[k]} — ответ. Пояснение по критерию со ссылкой [3]. Основание — реплика [3].")
+    ev = client.get(f"/api/evaluations/{ev_id}").json()
+    c08 = next(c for c in ev["criteria"] if c["criterion_id"] == "c08")
+    assert c08["explanation"].endswith("реплика [4].") and c08["reason"] == "Оператор предложил перевести деньги ему лично."
+    row = next(r for r in client.get("/api/dialogs").json() if r["conversation_id"] == "g-1")
+    assert row["gross_error"] is True and row["gross_error_reason"] == "Оператор предложил перевести деньги ему лично."
+    appeal = client.post("/api/appeals", json={"evaluation_id": ev_id, "criterion_id": "c04", "comment": "Спорно"}).json()
+    assert appeal["criterion"]["explanation"].endswith("[4].") and all("display_time" in t for t in appeal["fragment"])
+
+
+def test_call_has_readable_times_and_duration(client):
+    upload(client, [call("v-1"), chat("c-1")])
+    d = client.get("/api/dialogs/v-1").json()
+    assert [t["display_time"] for t in d["transcript"]][:4] == ["00:00", "00:00", "00:05", "00:20"]
+    assert d["transcript"][0]["timestamp"].startswith("2026-11-03T13:10:00")  # исходное время не теряется
+    assert d["duration_seconds"] == 59
+    rows = {r["conversation_id"]: r for r in client.get("/api/dialogs").json()}
+    assert rows["v-1"]["duration_seconds"] == 59 and "duration_seconds" in rows["c-1"]
+
+
+def test_health_estimate_ignores_mock(client):
+    est = client.get("/api/health").json()["estimate"]
+    assert est["cost_per_dialog_usd"] is None and est["based_on"] == 0 and est["workers"] >= 1
+    upload(client, [chat("e-1"), chat("e-2"), chat("e-3")])
+    evaluate(client, ["e-3"])  # тестовый режим не влияет на оценку цены
+    base = {"c01": "yes", "c02": "na", "c03": "na", "c04": 15, "c05": "yes", "c06": 7, "c07": "yes", "c08": "no"}
+    _finished(client, "e-1", base, lambda k: "x", cost=0.04, seconds=18.0)
+    _finished(client, "e-2", base, lambda k: "x", cost=0.06, seconds=22.0)
+    est = client.get("/api/health").json()["estimate"]
+    assert est == {"based_on": 2, "cost_per_dialog_usd": 0.05, "seconds_per_dialog": 20.0, "workers": est["workers"]}
+
+
+def test_load_saved_evaluations_without_model(tmp_path):
+    """Сохранённые оценки попадают в базу и видны через API; повторная загрузка не дублирует."""
+    from app.server.load_evals import load
+    from app.server.store import Store
+    evals = tmp_path / "evals"
+    evals.mkdir()
+    base = {"c01": "yes", "c02": "na", "c03": "na", "c04": 15, "c05": "yes", "c06": 7, "c07": "yes", "c08": "no"}
+    for cid in ("l-1", "l-2"):
+        (evals / f"{cid}.json").write_text(json.dumps({
+            "conversation_id": cid, "checklist_id": "freedom-chat", "checklist_version": 1, "provider": "anthropic",
+            "model": "claude-opus-5-5", "cost_usd": 0.05, "calls": [{"seconds": 20}],
+            "criteria": [{"criterion_id": k, "answer": v, "explanation": "Пояснение [2].", "evidence": [], "checked_range": None,
+                          "na_reason": None} for k, v in base.items()]}, ensure_ascii=False), encoding="utf-8")
+    (evals / "l-3.json").write_text(json.dumps({"conversation_id": "l-3", "error": "сбой"}), encoding="utf-8")
+    (evals / "summary.json").write_text("{}", encoding="utf-8")
+    db = tmp_path / "cqa.sqlite3"
+    stats = load(Store(db), evals, [chat("l-1"), chat("l-2")])
+    assert stats == {"loaded": 2, "skipped_existing": 0, "no_dialog": 0, "errors": 1, "unknown_checklist": 0}
+    assert load(Store(db), evals)["skipped_existing"] == 2
+    app = create_app(db_path=db, provider="mock", web_dir=False, data_dir=tmp_path, env_file=None)
+    with TestClient(app) as c:
+        rows = {r["conversation_id"]: r for r in c.get("/api/dialogs").json()}
+        assert rows["l-1"]["status"] == "evaluated" and rows["l-1"]["total"] is not None
+        assert c.get("/api/health").json()["estimate"]["cost_per_dialog_usd"] == 0.05

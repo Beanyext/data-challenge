@@ -102,7 +102,7 @@ async (originalPage) => {
     await page.goto('http://127.0.0.1:8765/');
     await page.getByRole('heading', { name: 'Диалоги', exact: true }).waitFor();
     check(!await page.locator('#demo-banner').isVisible(), 'API mode must not show demo banner');
-    check((await page.locator('#mode-label').innerText()) === 'API команды', 'Explicit API mode');
+    check(await page.locator('#mode-label').count() === 0, 'Top bar has no API label');
 
     await page.getByRole('link', { name: 'Чек-листы', exact: true }).click();
     await page.getByRole('button', { name: 'Новый чек-лист', exact: true }).click();
@@ -122,6 +122,7 @@ async (originalPage) => {
 
     await page.getByRole('link', { name: /Диалоги/ }).click();
     await page.getByRole('button', { name: 'Открыть api-qa-001', exact: true }).click();
+    await page.locator('#criterion-c01 .result-row').click();
     await page.locator('#criterion-c01 [data-appeal]').click();
     const comment = 'Учебное обращение «API» & <script>window.__apiUnsafe=1</script>';
     await page.getByRole('textbox', { name: 'Почему вы не согласны' }).fill(comment);

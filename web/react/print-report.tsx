@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
 import type { Appeal, Checklist, Criterion, CriterionResult, DialogRecord, Evaluation } from './types';
-import { channel, label, number } from './shared';
+import { channel, dialogTitle, label, number } from './shared';
 import { translate as t } from './i18n';
 import { stopMotion } from './motion';
+import { criterionReason, plainTurnRefs, turnTime } from './text';
 
 const answerText = (answer: unknown) => typeof answer === 'number' ? number(answer) : label(answer);
 function reportedAnswer(item: CriterionResult, criterion?: Criterion) {
@@ -26,11 +27,13 @@ export function PrintReport({ record, evaluation, checklist: availableChecklist,
   const sections = Array.isArray(checklist?.sections) ? checklist.sections : [];
   const decisions = appeals.filter(appeal => appeal.evaluation_id === evaluation?.id && appeal.decision);
   const roles: Record<string, string> = { operator: t('Оператор'), client: t('Клиент'), bot: t('Бот'), system: t('Система') };
+  const grossItem = criteria.find(item => item.answer === 'yes' && (item.gross_error || definitions.find(criterion => criterion.id === item.criterion_id)?.gross_error));
+  const grossReason = grossItem ? criterionReason(grossItem, definitions.find(criterion => criterion.id === grossItem.criterion_id)?.title) : '';
   const validTurn = (index: unknown): index is number => typeof index === 'number' && Number.isInteger(index) && index >= 0 && index < transcript.length;
   return <article className="print-report" aria-label={t('Отчёт о качестве диалога')}>
     <header className="print-report-heading"><img src="./assets/freedom-logo-print.svg" width="168" height="40" alt="Freedom"/><span>Conversation Quality Analytics</span></header>
     <h1>{t('Отчёт о качестве диалога')}</h1>
-    <p className="print-report-subject">{record.title || record.subject || t('Карточка диалога')}</p>
+    <p className="print-report-subject">{dialogTitle(record, 'Карточка диалога')}</p>
     {demo && <p className="print-notice"><strong>{t('Учебный пример.')}</strong> {t('Вымышленные диалоги и оценки, модель не вызывается.')}</p>}
     <dl className="print-metadata">
       <div><dt>{t('Диалог')}</dt><dd>{record.conversation_id}</dd></div>
@@ -42,7 +45,7 @@ export function PrintReport({ record, evaluation, checklist: availableChecklist,
     {evaluation ? <>
       <section className="print-summary"><div><span>{t('Итоговый балл')}</span><strong>{number(evaluation.total)} <small>/ 100</small></strong></div><div><span>{t('Критериев')}</span><strong>{criteria.length}</strong></div></section>
       {evaluation.total == null && <p className="print-notice">{t('Нет применимых критериев для расчёта')}</p>}
-      {evaluation.gross_error && <p className="print-notice print-critical"><strong>{t('Выявлена грубая ошибка')}</strong><br/>{t('Проверьте раздел нарушений. Эта отметка рассматривается отдельно от итогового балла.')}</p>}
+      {evaluation.gross_error && <p className="print-notice print-critical"><strong>{t('Выявлена грубая ошибка')}</strong>{grossReason && <>: {plainTurnRefs(grossReason)}</>}<br/>{t('На итог не влияет, учитывается отдельно.')}</p>}
       {criteria.some(item => item.needs_review) && <p className="print-notice">{t('Есть ответы, требующие проверки человеком. Проверьте обоснования перед использованием оценки.')}</p>}
       {!checklist && <p className="print-notice">{t('Версия чек-листа недоступна. Показаны сохранённые ответы и баллы.')}</p>}
       {(typeof evaluation.original_total === 'number' || decisions.length > 0) && <section className="print-revision"><h2>{t('Пересмотр результата')}</h2><p>{t('Исходная оценка')}: <strong>{number(evaluation.original_total)}</strong> · {t('Итоговая оценка')}: <strong>{number(evaluation.total)}</strong></p></section>}
@@ -62,11 +65,11 @@ export function PrintReport({ record, evaluation, checklist: availableChecklist,
           <h3>{String(index + 1).padStart(2, '0')} · {definition?.title || item.criterion_id}</h3>
           <p className="print-answer"><strong>{reportedAnswer(item, definition)}</strong>{item.needs_review && <span> · {t('Нужна проверка')}</span>}</p>
           {definition?.gross_error && <p>{t('Отмечается отдельно от итогового балла.')}</p>}
-          {item.answer === 'na' ? <div><h4>{t('Почему критерий не применяется')}</h4><p>{item.na_reason || t('Причина не указана в результате.')}</p></div> : !definition?.gross_error && <>
+          {item.answer === 'na' ? <div><h4>{t('Почему критерий не применяется')}</h4><p>{item.na_reason ? plainTurnRefs(item.na_reason) : t('Причина не указана в результате.')}</p></div> : !definition?.gross_error && <>
             <p className="print-calculation">{t('Баллы в итог')}: <strong>{number(item.points ?? item.score)} / {number(item.effective_weight ?? baseWeight)}</strong> · {t('Базовый вес')}: {number(baseWeight)}{item.effective_weight != null && <> · {t(adjustedWeight ? 'Вес после N/A' : 'Максимум баллов')}: {number(item.effective_weight)}</>}</p>
             {definition?.answer_type === 'scale' && scale && <p>{t('Оценка по шкале')}: {number(item.answer)} / {number(scale.max)}{scale.steps?.find(step => step.value === item.answer)?.label && <> — {scale.steps.find(step => step.value === item.answer)!.label}</>}</p>}
           </>}
-          <h4>{t('Обоснование')}</h4><p>{item.explanation || t('Обоснование не получено.')}</p>
+          <h4>{t('Обоснование')}</h4><p>{item.explanation ? plainTurnRefs(item.explanation) : t('Обоснование не получено.')}</p>
           {evidence.map((entry, evidenceIndex) => <div className="print-evidence" key={evidenceIndex}><h4>{validTurn(entry.turn) ? t('Реплика {n}', { n: entry.turn + 1 }) : t('Цитата из диалога')}</h4><blockquote>«{entry.quote}»</blockquote>{!validTurn(entry.turn) && <p>{t('Корректный номер реплики не указан')}</p>}</div>)}
           {range && <p><strong>{t('Проверенный участок разговора')}: </strong>{validTurn(range.from) && validTurn(range.to) && range.to >= range.from ? t('Реплики {from}–{to}', { from: range.from + 1, to: range.to + 1 }) : t('Некорректный диапазон доказательства')}</p>}
           {definition && <div className="print-rule"><h4>{t('Правило и условия критерия')}</h4><p>{definition.description}</p>{definition.na_allowed && <p>N/A: {definition.na_rule || t('Не указан')}</p>}{definition.notes && <p>{definition.notes}</p>}</div>}
@@ -74,7 +77,7 @@ export function PrintReport({ record, evaluation, checklist: availableChecklist,
         </section>;
       })}
     </> : <p className="print-notice">{t('Оценка ещё не выполнена')}</p>}
-    <section className="print-transcript"><h2>{t('Транскрипт')}</h2><p>{t('Оценивается оператор. Бот и система дают контекст.')}</p>{transcript.map((turn, index) => <div className="print-turn" key={index}><h4>{index + 1} · {roles[turn.speaker] || turn.speaker}{turn.timestamp && ` · ${turn.timestamp}`}</h4><p>{turn.text}</p></div>)}</section>
+    <section className="print-transcript"><h2>{t('Транскрипт')}</h2><p>{t('Оценивается оператор. Бот и система дают контекст.')}</p>{transcript.map((turn, index) => <div className="print-turn" key={index}><h4>{index + 1} · {roles[turn.speaker] || turn.speaker}{turnTime(turn) && ` · ${turnTime(turn)}`}</h4><p>{turn.text}</p></div>)}</section>
     <footer className="print-footer">Freedom · Conversation Quality Analytics · {record.conversation_id}</footer>
   </article>;
 }

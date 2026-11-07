@@ -1,12 +1,12 @@
 import { createRoot, type Root } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import type { ComponentProps, ReactNode } from 'react';
-import { DialogsView, DialogRows, DialogView, ErrorView, LoadingView, ModalContents, type ModalProps } from './pages';
-import { ChecklistEditor, AppealsView, ReviewForm, ScalePreview } from './forms';
+import { DialogsView, DialogRows, DialogView, ErrorView, LoadingView, ModalContents, DialogKpis, ScoreHeader, EstimateNote, type ModalProps, type ListStats } from './pages';
+import { ChecklistEditor, AppealsView, ReviewForm, ScalePreview, SavedBanner } from './forms';
 import { Icon, EmptyState } from './shared';
 import { clearSlots, setSlot } from './slots';
 import { MotionFrame, installInteractionMotion, animateElement } from './motion';
-import type { DialogRecord, Scale } from './types';
+import type { DialogRecord, Scale, ScoreSort, Health, SavedNotice } from './types';
 import { translate as t, localizeMessage, localizeShell, reloadInLanguage, type Locale } from './i18n';
 import { LanguageSwitcher } from './language-switcher';
 import { FocusToggle } from './review-tools';
@@ -55,8 +55,12 @@ export const ui = {
   dialog: (props: ComponentProps<typeof DialogView>) => page(<DialogView {...props}/>),
   editor: (props: ComponentProps<typeof ChecklistEditor>) => page(<ChecklistEditor {...props}/>),
   appeals: (props: ComponentProps<typeof AppealsView>) => page(<AppealsView {...props}/>),
-  rows(rows: DialogRecord[], selected: Set<string>, totalRows: number, filters: Filters) {
+  rows(rows: DialogRecord[], selected: Set<string>, totalRows: number, filters: Filters, view?: { sort: ScoreSort; stats: ListStats }) {
     slot('dialog-rows', <DialogRows rows={rows} selected={new Set(selected)}/>);
+    if (view) {
+      slot('score-heading', <ScoreHeader sort={view.sort}/>);
+      slot('dialog-kpis', <DialogKpis stats={view.stats} status={filters.status}/>);
+    }
     slot('active-filters', <ActiveFilters filters={{ ...filters }}/>);
     slot('list-selection', <SelectionSummary count={selected.size}/>);
     slot('list-empty', totalRows
@@ -64,6 +68,8 @@ export const ui = {
       : <EmptyState title={t('Добавьте первый диалог')} text={t('Импортируйте набор по group_id или загрузите транскрипт в JSON.')} actions={<button className="btn btn-primary" data-action="import">{t('Импорт набора')}</button>}/>);
   },
   scale: (scale?: Scale | null) => slot('scale-preview', <ScalePreview scale={scale}/>),
+  estimate: (health: Health | null, count: number) => slot('evaluate-estimate', <EstimateNote health={health} count={count}/>),
+  savedNotice: (notice: SavedNotice | null) => slot('checklist-saved', <SavedBanner notice={notice}/>),
   editorErrors: (errors: string[]) => slot('editor-errors', <div className="notice error rule">{errors.map((error, index) => <div key={index}>{error}</div>)}</div>),
   review: (props: ComponentProps<typeof ReviewForm>) => slot(`review-${props.appeal.id}`, <MotionFrame kind="modal"><ReviewForm {...props}/></MotionFrame>),
   reviewMessage: (id: string, message: string, error = false) => slot(`review-${id}`, <p className={error ? 'danger' : 'muted'} role="status">{localizeMessage(message)}</p>),
