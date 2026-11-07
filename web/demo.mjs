@@ -270,15 +270,18 @@ function fictionalEvaluation(dialog, checklist, id) {
     if (c.id === 'c07') { answer = interrupted && c.na_allowed ? 'na' : violation ? 'no' : 'yes'; turn = last; }
     if (c.gross_error && violation) turn = ops.at(-2) ?? first;
     const needs_review = !known.has(c.id);
+    const cited = answer === 'na' || needs_review ? null : answer === 'no' ? first : turn;
+    // Messages are cited as the server does: «[N]» is message N of the transcript.
+    const basis = cited == null ? '' : answer === 'no' ? ` Основание — реплики [${first + 1}]–[${last + 1}].` : ` Основание — реплика [${cited + 1}].`;
     return {
       criterion_id: c.id, answer, needs_review,
-      explanation: needs_review
+      explanation: (needs_review
         ? 'Учебный ответ для нового критерия. Настоящую оценку должен выполнить сервер с моделью.'
         : c.id === 'c03' ? 'Общий вопрос о тарифах не требует раскрытия персональных данных. Учебный пример.'
         : c.id === 'c02' ? 'Вопрос полностью сформулирован до подключения оператора. Учебный пример.'
         : c.id === 'c07' && interrupted ? 'Клиент покинул чат до завершения. Учебный пример.'
         : c.id === 'c08' && violation ? 'В вымышленной реплике есть предложение услуги вне компании.'
-        : 'Синтетическая оценка для проверки интерфейса. Не результат работы ИИ.',
+        : 'Синтетическая оценка для проверки интерфейса. Не результат работы ИИ.') + basis,
       evidence: answer === 'na' || answer === 'no' || needs_review ? [] : [{ turn, quote: dialog.transcript[turn].text }],
       checked_range: answer === 'no' || needs_review ? { from: first, to: last } : null,
       na_reason: answer === 'na' ? c.id === 'c03' ? 'Общий вопрос не требует идентификации.' : c.id === 'c07' ? 'Клиент прервал разговор.' : 'Данных для ответа хватало с самого начала.' : null,
@@ -320,6 +323,26 @@ function validateRecord(value) {
   for (const turn of value.transcript) {
     if (!['client', 'operator', 'bot', 'system'].includes(turn.speaker) || typeof turn.text !== 'string' || typeof turn.timestamp !== 'string') demoError('У реплики нужны speaker, text и timestamp.');
   }
+}
+
+// Time from the start of the conversation, as the server sends it in display_time.
+function displayTimes(turns) {
+  const mmss = value => { const whole = Math.floor(value); return `${String(Math.floor(whole / 60)).padStart(2, '0')}:${String(whole % 60).padStart(2, '0')}`; };
+  const iso = turns.every(t => /^\d{4}-\d{2}-\d{2}T/.test(String(t.timestamp)));
+  if (!iso) return turns.map(t => String(t.timestamp ?? ''));
+  const start = Date.parse(turns[0].timestamp);
+  return turns.map(t => mmss(Math.max(0, (Date.parse(t.timestamp) - start) / 1000)));
+}
+const seconds = value => { const m = /^(\d+):(\d{2})$/.exec(String(value)); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+const FRAGMENT_PAD = 2;
+function fragment(dialog, item) {
+  const turns = (dialog?.transcript || []);
+  if (!turns.length) return [];
+  const marks = [...(item?.evidence || []).map(e => e.turn), ...(item?.checked_range ? [item.checked_range.from, item.checked_range.to] : [])].filter(Number.isInteger);
+  const lo = marks.length ? Math.max(0, Math.min(...marks) - FRAGMENT_PAD) : 0;
+  const hi = marks.length ? Math.min(turns.length - 1, Math.max(...marks) + FRAGMENT_PAD) : Math.min(turns.length - 1, 2 * FRAGMENT_PAD);
+  const times = displayTimes(turns);
+  return turns.slice(lo, hi + 1).map((t, i) => ({ turn: lo + i, speaker: t.speaker, timestamp: t.timestamp, display_time: times[lo + i], text: t.text }));
 }
 
 function tone() {
@@ -370,7 +393,11 @@ export function createDemoApi({ storage } = {}) {
   const latest = id => state.checklists.filter(c => c.id === id).sort((a, b) => b.version - a.version)[0] ?? demoError('Чек-лист не найден.');
   const row = d => {
     const e = d.evaluation_id ? state.evaluations.find(x => x.id === d.evaluation_id) : null;
-    return { ...copy(d), status: e ? 'evaluated' : 'new', total: e?.total ?? null, gross_error: e?.gross_error ?? false, original_total: e?.original_total ?? null, needs_review: e?.criteria.some(c => c.needs_review) ?? false };
+    const times = displayTimes(d.transcript || []);
+    const gross = e?.criteria.find(c => e.checklist.criteria.find(x => x.id === c.criterion_id)?.gross_error && c.answer === 'yes');
+    const shown = copy(d);
+    shown.transcript = (shown.transcript || []).map((t, i) => ({ ...t, display_time: times[i] }));
+    return { ...shown, turns: shown.transcript.length, duration_seconds: seconds(times.at(-1)), status: e ? 'evaluated' : 'new', total: e?.total ?? null, gross_error: e?.gross_error ?? false, gross_error_reason: gross?.explanation ?? null, original_total: e?.original_total ?? null, needs_review: e?.criteria.some(c => c.needs_review) ?? false, checklist_id: e?.checklist_id ?? null, checklist_version: e?.checklist_version ?? null, open_appeals: e ? state.appeals.filter(a => a.evaluation_id === e.id && a.status === 'open').length : 0 };
   };
   const accept = async fn => copy(await fn());
   const service = {
@@ -425,7 +452,14 @@ export function createDemoApi({ storage } = {}) {
       const shown = copy(job); delete shown.pending_evaluations; return shown;
     }),
     getEvaluation: id => accept(() => ({ ...find('evaluations', id), appeals: state.appeals.filter(a => a.evaluation_id === id) })),
-    listAppeals: () => accept(() => state.appeals.map(a => ({ ...a, conversation_id: find('evaluations', a.evaluation_id).conversation_id }))),
+    listAppeals: () => accept(() => state.appeals.map(a => {
+      const e = find('evaluations', a.evaluation_id);
+      const item = e.criteria.find(c => c.criterion_id === a.criterion_id);
+      const c = e.checklist.criteria.find(x => x.id === a.criterion_id);
+      return { ...a, conversation_id: e.conversation_id, criterion_title: c?.title ?? null, total: e.total, original_total: e.original_total,
+        criterion: item ? { ...item, title: c?.title, gross_error: Boolean(c?.gross_error && item.answer === 'yes') } : null,
+        fragment: fragment(state.dialogs.find(d => d.conversation_id === e.conversation_id), item) };
+    })),
     createAppeal: payload => accept(() => {
       if (!String(payload?.comment || '').trim()) demoError('Напишите, почему вы оспариваете оценку.');
       const e = find('evaluations', payload.evaluation_id);
@@ -451,6 +485,8 @@ export function createDemoApi({ storage } = {}) {
       item.original_answer = original; item.answer = answer; item.review_reason = appeal.decision.reason; item.needs_review = false;
       score(e); persist(); return { ...appeal, evaluation: e };
     }),
+    getHealth: () => accept(() => ({ ok: true, provider: 'demo', model: 'Учебный пример (без ИИ)', dialogs: state.dialogs.length, checklists: new Set(state.checklists.map(c => c.id)).size,
+      estimate: { based_on: 0, cost_per_dialog_usd: null, seconds_per_dialog: null, workers: 1 } })),
     getAudio: id => accept(() => {
       const d = find('dialogs', id);
       if (d.channel !== 'voice call') demoError('У этого диалога нет записи.');

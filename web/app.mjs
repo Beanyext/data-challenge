@@ -13,7 +13,7 @@ let toastTimer, routeRevision = 0, polling = false;
 let saved = {};
 try { saved = JSON.parse(localStorage.getItem('cqa-connection') || '{}'); } catch { /* Storage may be unavailable. */ }
 const config = window.CQA_CONFIG || {};
-const S = { demo:new URLSearchParams(location.search).get('demo') === '1' || (saved.demo ?? config.demo ?? false), baseUrl:saved.baseUrl ?? config.apiBase ?? '/api', rows:[], checklists:[], appeals:[], selected:new Set(), filters:{query:'', language:'', channel:'', status:''}, dialog:null, evaluation:null, audio:null, editor:null, criterionIndex:0, dirty:false, busy:false, appealFilter:'open' };
+const S = { demo:new URLSearchParams(location.search).get('demo') === '1' || (saved.demo ?? config.demo ?? false), baseUrl:saved.baseUrl ?? config.apiBase ?? '/api', rows:[], checklists:[], appeals:[], selected:new Set(), filters:{query:'', language:'', channel:'', status:''}, dialog:null, evaluation:null, audio:null, editor:null, criterionIndex:0, dirty:false, busy:false, appealFilter:'open', sort:null, savedNotice:null, pendingTurn:null };
 let api;
 let languageReload = false, currentModal = null;
 let languageDraft = takeLanguageDraft(getLocale(), location.hash);
@@ -35,7 +35,7 @@ async function restoreLanguageView() {
   languageDraft = null;
   if (!draft || location.hash !== draft.route) return;
   for (const form of draft.forms) if (form.decision && document.getElementById(`review-${form.decision}`)) { await showReview(form.decision); if (location.hash !== draft.route) return; }
-  if (draft.modal && ['appeal','settings','import','evaluate'].includes(draft.modal.contents?.kind)) openModal(draft.modal.title,draft.modal.contents,draft.modal.formId);
+  if (draft.modal && ['appeal','settings','import','evaluate'].includes(draft.modal.contents?.kind)) { openModal(draft.modal.title,draft.modal.contents,draft.modal.formId); if (draft.modal.contents.kind === 'evaluate') loadEstimate(Number(draft.modal.contents.count) || 1); }
   restoreFormDrafts(draft.forms);
   if (Number.isFinite(draft.scrollY)) window.scrollTo({top:draft.scrollY,behavior:'instant'});
 }
@@ -51,7 +51,6 @@ function busyButton(button, busy) { if (button) { button.disabled = busy; button
 function connect() {
   api = createApi({ baseUrl:S.baseUrl, demo:S.demo });
   $('#demo-banner').hidden = !S.demo;
-  $('#mode-label').textContent = t(S.demo ? 'Учебный пример' : 'API команды');
   $('#connection-label').textContent = t(S.demo ? 'Учебный пример' : 'Настройки подключения');
 }
 function section() { return (location.hash.slice(1).split('/')[0] || 'dialogs'); }
@@ -60,6 +59,14 @@ function checklistKey(c) { return `${c.id}@${c.version}`; }
 function findChecklist(key) { return S.checklists.find(c => checklistKey(c) === key) || S.checklists.find(c => c.id === key) || S.checklists[0]; }
 function checklistForEvaluation() { return S.evaluation?.checklist || S.checklists.find(c => c.id === S.evaluation?.checklist_id && c.version === S.evaluation?.checklist_version) || findChecklist(S.evaluation?.checklist_id); }
 function nameForRow(row) { return row.title || row.subject || row.transcript?.find(t => t.speaker === 'client')?.text || 'Диалог поддержки'; }
+function turnCount(conversationId) { const row=S.rows.find(r => r.conversation_id === conversationId); const n=Number(row?.turns ?? row?.transcript?.length); return Number.isFinite(n) && n > 0 ? n : undefined; }
+function listStats() {
+  const completed = S.rows.filter(r => typeof r.total === 'number');
+  return { total:S.rows.length, completed:completed.length, average:completed.length ? completed.reduce((sum, r) => sum + r.total, 0) / completed.length : null, gross:S.rows.filter(r => r.gross_error).length };
+}
+// Results of the same checklist made with an earlier version keep their totals until they are evaluated again.
+function staleRows(notice) { return S.rows.filter(r => r.checklist_id === notice.checklistId && r.checklist_version != null && Number(r.checklist_version) < notice.version).map(r => r.conversation_id); }
+function savedNoticeView() { return S.savedNotice ? { ...S.savedNotice, stale:staleRows(S.savedNotice) } : null; }
 function openModal(title, contents, formId) {
   currentModal = {title,contents,formId};
   ui.modal(title,contents);
@@ -81,6 +88,7 @@ async function loadRoute() {
     S.rows = rows; S.checklists = checklists; S.appeals = appeals;
     $('#dialog-count').textContent = rows.length;
     $('#appeal-count').textContent = appeals.filter(a => a.status === 'open').length || '';
+    if (page !== 'checklists') S.savedNotice = null;
     if (page === 'dialog' && id) {
       const record = await api.getDialog(decodeURIComponent(id));
       const evaluationId = record.evaluation_id || rows.find(r => r.conversation_id === record.conversation_id)?.evaluation_id;
@@ -97,18 +105,20 @@ async function loadRoute() {
   } catch (e) { if (revision === routeRevision) showError(e); }
 }
 function renderDialogs() {
-  const completed = S.rows.filter(r => typeof r.total === 'number');
-  const average = completed.length ? completed.reduce((sum, r) => sum + r.total, 0) / completed.length : null;
-  ui.dialogs({rows:S.rows,completedCount:completed.length,average,filters:S.filters});
+  ui.dialogs({rows:S.rows,stats:listStats(),filters:S.filters,sort:S.sort});
   renderRows();
 }
 function visibleRows() {
   const f = S.filters;
-  return S.rows.filter(r => (!f.language || r.language === f.language) && (!f.channel || r.channel === f.channel) && (!f.query || `${r.conversation_id} ${nameForRow(r)} ${(r.transcript || []).map(t => t.text).join(' ')}`.toLocaleLowerCase().includes(f.query.toLocaleLowerCase())) && (!f.status || (f.status === 'gross' ? r.gross_error : f.status === 'completed' ? typeof r.total === 'number' : !r.evaluation_id)));
+  const rows = S.rows.filter(r => (!f.language || r.language === f.language) && (!f.channel || r.channel === f.channel) && (!f.query || `${r.conversation_id} ${nameForRow(r)} ${(r.transcript || []).map(t => t.text).join(' ')}`.toLocaleLowerCase().includes(f.query.toLocaleLowerCase())) && (!f.status || (f.status === 'gross' ? r.gross_error : f.status === 'completed' ? typeof r.total === 'number' : !r.evaluation_id)));
+  if (!S.sort) return rows;
+  // Stable sort by score; conversations without a score stay at the end in both directions.
+  const direction = S.sort === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => { const x = typeof a.total === 'number', y = typeof b.total === 'number'; return x !== y ? (x ? -1 : 1) : x ? direction * (a.total - b.total) : 0; });
 }
 function renderRows() {
   const rows = visibleRows();
-  ui.rows(rows,S.selected,S.rows.length,S.filters);
+  ui.rows(rows,S.selected,S.rows.length,S.filters,{sort:S.sort,stats:listStats()});
   $('#list-empty').hidden = rows.length > 0;
   $('#visible-count').textContent = t('Показано {visible} из {total}',{visible:rows.length,total:S.rows.length});
   $('#select-all').checked = rows.length > 0 && rows.every(r => S.selected.has(r.conversation_id));
@@ -151,7 +161,7 @@ async function loadAudio() {
 }
 function freshChecklist() { return {id:`checklist-${Date.now()}`,version:1,name:t('Новый чек-лист'),rounding:{digits:2},guidance:[],sections:[{id:'s1',name:t('Общие критерии')}],criteria:[]}; }
 function renderEditor() {
-  ui.editor({checklist:S.editor,checklists:S.checklists,criterionIndex:S.criterionIndex,dirty:S.dirty});
+  ui.editor({checklist:S.editor,checklists:S.checklists,criterionIndex:S.criterionIndex,dirty:S.dirty,saved:savedNoticeView()});
 }
 function updateEditor(target) {
   if(target.dataset.edit) S.editor[target.dataset.edit]=target.value;
@@ -192,10 +202,12 @@ async function saveChecklist(button) {
     const payload=structuredClone(S.editor);payload.criteria.forEach(c=>delete c._stepsText);
     const result=await api.saveChecklist(payload);
     S.editor=structuredClone(result);S.dirty=false;
-    await loadRoute();notify(t('Сохранена версия {version}. Повторная оценка использует новые правила.',{version:result.version}));
+    S.savedNotice={checklistId:result.id,version:Number(result.version),criteria:(result.criteria||payload.criteria).length};
+    await loadRoute();
+    document.querySelector('.saved-banner')?.scrollIntoView({block:'nearest'});
   } catch(e) {notify(errorText(e),true);busyButton(button,false);}
 }
-function renderAppeals() { ui.appeals({appeals:S.appeals,filter:S.appealFilter}); }
+function renderAppeals() { ui.appeals({appeals:S.appeals,filter:S.appealFilter,turnCounts:Object.fromEntries(S.appeals.map(a => [a.conversation_id ?? '', turnCount(a.conversation_id)]).filter(([, n]) => n))}); }
 async function showReview(id) {
   const appeal=S.appeals.find(a=>a.id===id);
   const area=document.getElementById(`review-${id}`);
@@ -204,7 +216,7 @@ async function showReview(id) {
     const ev=await api.getEvaluation(appeal.evaluation_id);
     if(document.getElementById(`review-${id}`)!==area) return;
     const cl=ev.checklist || findChecklist(ev.checklist_id),c=cl.criteria.find(c=>c.id===appeal.criterion_id),item=ev.criteria.find(c=>c.criterion_id===appeal.criterion_id);
-    ui.review({appeal,criterion:c,item});
+    ui.review({appeal,criterion:c,item,transcriptLength:turnCount(appeal.conversation_id || ev.conversation_id)});
   } catch(e) {if(document.getElementById(`review-${id}`)===area) ui.reviewMessage(id,errorText(e),true);}
 }
 function showAppeal(criterionId) {
@@ -224,6 +236,13 @@ function showEvaluate(ids, selectedChecklist) {
   if(!S.checklists.length) return notify('Сначала создайте чек-лист.',true);
   openModal('Запустить оценку',{kind:'evaluate',count:ids.length,selectedChecklist,checklists:S.checklists,demo:S.demo},'evaluate-form');
   $('#evaluate-form')._ids=ids;
+  loadEstimate(ids.length);
+}
+// Price and time come from the server's recent real evaluations. Without them the general confirmation text stays.
+async function loadEstimate(count) {
+  ui.estimate(null,count);
+  try { const health=await api.getHealth(); if(modal.open && $('#evaluate-form')) ui.estimate(health,count); }
+  catch { /* The estimate is optional. */ }
 }
 async function pollJob(id) {
   if(polling) return;
@@ -260,7 +279,8 @@ document.addEventListener('click',async event=>{
     else if(el.dataset.appealFilter){S.appealFilter=el.dataset.appealFilter;renderAppeals();}
     else if(el.dataset.review) await showReview(el.dataset.review);
     else if(el.dataset.cancelReview) document.getElementById(`review-${el.dataset.cancelReview}`).hidden=true;
-    else if(el.dataset.context){const a=S.appeals.find(a=>a.id===el.dataset.context);const ev=await api.getEvaluation(a.evaluation_id);location.hash=`dialog/${encodeURIComponent(ev.conversation_id)}`;}
+    else if(el.dataset.fragmentTurn!==undefined) showFragmentTurn(el.dataset.fragmentAppeal,el.dataset.fragmentTurn);
+    else if(el.dataset.context){const a=S.appeals.find(a=>a.id===el.dataset.context);const cid=a.conversation_id||(await api.getEvaluation(a.evaluation_id)).conversation_id;S.pendingTurn=el.dataset.contextTurn!==undefined?Number(el.dataset.contextTurn):null;location.hash=`dialog/${encodeURIComponent(cid)}`;}
     else if(el.dataset.resumeJob) pollJob(el.dataset.resumeJob);
     else switch(el.dataset.action){
       case 'close-modal':modal.close();break;
@@ -271,6 +291,10 @@ document.addEventListener('click',async event=>{
       case 'upload':$('#upload-file').click();break;
       case 'audio':await loadAudio();break;
       case 'refresh-audio':S.audio=null;await loadAudio();break;
+      case 'status-filter':{const value=S.filters.status===el.dataset.status?'':el.dataset.status;S.filters.status=value;const control=document.querySelector('[data-filter="status"]');if(control)control.value=value;renderRows();break;}
+      case 'sort-score':S.sort=S.sort===null?'asc':S.sort==='asc'?'desc':null;renderRows();break;
+      case 'dismiss-saved':S.savedNotice=null;ui.savedNotice(null);break;
+      case 'reevaluate-saved':if(S.savedNotice)showEvaluate(staleRows(S.savedNotice),S.savedNotice.checklistId);break;
       case 'reset-filters':S.filters={query:'',channel:'',language:'',status:''};renderDialogs();$('#search-dialogs')?.focus();break;
       case 'clear-selection':S.selected.clear();renderRows();$('#select-all')?.focus();break;
       case 'evaluate-selected':showEvaluate([...S.selected]);break;
@@ -327,6 +351,19 @@ document.addEventListener('submit',async event=>{
     }
   }catch(e){notify(errorText(e),true);}finally{busyButton(button,false);}
 });
-window.addEventListener('hashchange',async()=>{window.scrollTo({top:0});await loadRoute();main.focus({preventScroll:true});});
+window.addEventListener('hashchange',async()=>{
+  window.scrollTo({top:0});await loadRoute();main.focus({preventScroll:true});
+  // A turn number in an appeal opens the conversation at that message.
+  const turn=S.pendingTurn;S.pendingTurn=null;
+  if(turn!=null&&section()==='dialog')await highlightTurn(turn);
+});
+function showFragmentTurn(appealId, turn) {
+  const row=document.getElementById(`appeal-${appealId}-turn-${turn}`);
+  if(!row)return;
+  document.querySelectorAll('.appeal-fragment li.highlight').forEach(item=>item.classList.remove('highlight'));
+  row.classList.add('highlight');
+  row.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'nearest'});
+  row.focus({preventScroll:true});
+}
 window.addEventListener('beforeunload',event=>{if(S.dirty&&!languageReload){event.preventDefault();event.returnValue='';}});
 try{ui.language(prepareLanguageReload,()=>{languageReload=false;notify('Не удалось обновить страницу. Повторите выбор языка.',true);});connect();loadRoute();let active;try{active=JSON.parse(sessionStorage.getItem('cqa-active-job')||'null');}catch{/* Ignore malformed browser state. */}if(active?.id&&active.baseUrl===S.baseUrl&&active.demo===S.demo)pollJob(active.id);}catch(e){showError(e);}

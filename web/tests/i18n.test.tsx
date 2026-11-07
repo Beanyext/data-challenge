@@ -37,7 +37,7 @@ test('each locale renders translated UI and preserves supplied content', () => {
   try {
     for (const [locale, heading, totalLabel] of [['ru','Диалоги','Итоговый балл'],['en','Conversations','Total score'],['kk','Диалогтар','Жалпы ұпай']] as const) {
       setLocale(locale);
-      const list = renderToStaticMarkup(<DialogsView rows={[]} completedCount={0} average={null} filters={{query:'draft',channel:'',language:'',status:''}}/>);
+      const list = renderToStaticMarkup(<DialogsView rows={[]} stats={{total:0,completed:0,average:null,gross:0}} filters={{query:'draft',channel:'',language:'',status:''}}/>);
       assert.ok(list.includes(heading));
       const result = renderToStaticMarkup(<EvaluationView evaluation={evaluation} checklist={checklist} dialog={{conversation_id:'d',channel:'agent chat',language:'RU',transcript:[{speaker:'client',text:'Исходная цитата'}]}}/>);
       assert.ok(result.includes(totalLabel), `${locale}: total label`);

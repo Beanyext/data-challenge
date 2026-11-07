@@ -195,6 +195,36 @@ test('demo validates empty input, new upload, duplicate upload and quote charact
   await assert.rejects(api.uploadDialog(file), /уже загружен/);
 });
 
+test('health feeds the evaluation estimate; demo reports a free run without price history', async t => {
+  const old = globalThis.fetch;
+  t.after(() => { globalThis.fetch = old; });
+  const calls = [];
+  globalThis.fetch = async url => { calls.push(url); return Response.json({ ok: true, provider: 'mock', model: 'mock', estimate: { based_on: 0, cost_per_dialog_usd: null, seconds_per_dialog: null, workers: 5 } }); };
+  assert.equal((await createApi().getHealth()).provider, 'mock');
+  assert.deepEqual(calls, ['/api/health']);
+  const demo = await createDemoApi({ storage: storage() }).getHealth();
+  assert.equal(demo.provider, 'demo');
+  assert.equal(demo.estimate.cost_per_dialog_usd, null);
+});
+
+test('demo rows and appeals carry call length, display time, version and the disputed fragment', async () => {
+  const api = createDemoApi({ storage: storage() });
+  const rows = await api.listDialogs();
+  const voice = rows.find(d => d.channel === 'voice call');
+  assert.equal(voice.duration_seconds, 20);
+  assert.equal(voice.transcript[1].display_time, '00:02');
+  assert.ok(rows.filter(d => d.evaluation_id).every(d => d.checklist_id === 'freedom-chat' && d.checklist_version === 1));
+  assert.match(rows.find(d => d.gross_error).gross_error_reason, /вне компании/);
+  const evaluation = await api.getEvaluation(rows[0].evaluation_id);
+  assert.match(evaluation.criteria.find(c => c.criterion_id === 'c01').explanation, /Основание — реплика \[5\]\./);
+  await api.createAppeal({ evaluation_id: evaluation.id, criterion_id: 'c04', comment: 'Проверить.' });
+  const [appeal] = await api.listAppeals();
+  assert.equal(appeal.criterion.criterion_id, 'c04');
+  assert.equal(appeal.total, evaluation.total);
+  assert.ok(appeal.fragment.some(turn => turn.turn === appeal.criterion.evidence[0].turn));
+  assert.equal((await api.listDialogs())[0].open_appeals, 1);
+});
+
 test('demo audio is a generated local signal with turn offsets, not a customer recording', async () => {
   const api = createDemoApi({ storage: storage() });
   const voice = (await api.listDialogs()).find(d => d.channel === 'voice call');

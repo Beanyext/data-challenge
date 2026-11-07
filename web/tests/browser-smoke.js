@@ -18,8 +18,10 @@ async (originalPage) => {
     results.push('search, empty state, language filter');
 
     await page.getByRole('button', { name: 'Открыть demo-ru-001', exact: true }).click();
-    await page.locator('.evidence-link').first().click();
+    await page.locator('.result-criterion .result-row').first().click();
+    await page.locator('.result-criterion .evidence-link').first().click();
     check(await page.locator('.turn.highlight').count() === 1, 'Evidence target');
+    await page.locator('#criterion-c07 .result-row').click();
     await page.locator('#criterion-c07 [data-appeal]').click();
     await page.getByRole('textbox', { name: 'Почему вы не согласны' }).fill('Учебная апелляция «проверка» & <script>window.__unsafe=1</script>');
     await page.getByRole('button', { name: 'Подать апелляцию', exact: true }).click();
@@ -33,7 +35,7 @@ async (originalPage) => {
     await page.getByRole('button', { name: /Все обращения/ }).click();
     await page.getByRole('button', { name: 'Открыть диалог ↗', exact: true }).click();
     await page.locator('#criterion-c07 .revision').waitFor();
-    check((await page.locator('.result-overview').innerText()).includes('Исходная оценка'), 'Original score retained');
+    check((await page.locator('.result-total-revision').innerText()).includes('Исходная оценка'), 'Original score retained');
     await page.reload();
     await page.locator('#criterion-c07 .revision').waitFor();
     check(!await page.evaluate(() => window.__unsafe), 'Escaped user text');
@@ -53,11 +55,12 @@ async (originalPage) => {
     await page.getByRole('button', { name: 'Оценить диалог ↗', exact: true }).click();
     await page.getByRole('checkbox', { name: /Понимаю, что это учебная/ }).check();
     await page.locator('#evaluate-form').getByRole('button', { name: 'Оценить диалог', exact: true }).click();
-    await page.locator('.result-score').waitFor();
+    await page.locator('.result-ring').waitFor();
     check(await page.locator('.criterion').count() === 9, 'New criterion applied');
     await page.getByRole('button', { name: 'Загрузить запись', exact: true }).click();
     await page.waitForFunction(() => document.querySelector('#call-audio')?.duration > 0);
-    await page.locator('.evidence-link').first().click();
+    await page.locator('.result-criterion .result-row').first().click();
+    await page.locator('.result-criterion .evidence-link').first().click();
     results.push('checklist version, new criterion, background evaluation, audio');
 
     await page.getByRole('link', { name: /Диалоги/ }).click();

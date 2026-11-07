@@ -88,5 +88,7 @@ export function createApi({ baseUrl = '/api', demo = false, timeout = 20000 } = 
     createAppeal: payload => request('/appeals', { method: 'POST', body: payload }),
     decideAppeal: (value, payload) => request(`/appeals/${id(value)}/decision`, { method: 'POST', body: payload }),
     getAudio: value => request(`/dialogs/${id(value)}/audio`),
+    // {provider, model, estimate:{based_on, cost_per_dialog_usd, seconds_per_dialog, workers}} for the evaluation dialog.
+    getHealth: () => request('/health'),
   };
 }

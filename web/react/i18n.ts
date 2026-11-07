@@ -4,10 +4,11 @@ import { pagesMessages } from './messages/pages';
 import { resultMessages } from './messages/result';
 import { errorMessages } from './messages/errors';
 import { reviewMessages } from './messages/review';
+import { uxMessages } from './messages/ux';
 
 export type Locale = 'ru' | 'kk' | 'en';
 export const LANGUAGE_KEY = 'cqa-ui-language';
-export const catalog = { ...formsMessages, ...pagesMessages, ...resultMessages, ...errorMessages, ...commonMessages, ...reviewMessages };
+export const catalog = { ...formsMessages, ...pagesMessages, ...resultMessages, ...errorMessages, ...commonMessages, ...reviewMessages, ...uxMessages };
 export const isLocale = (value: unknown): value is Locale => value === 'ru' || value === 'kk' || value === 'en';
 export function readLocale(url: string, storage?: Pick<Storage, 'getItem'>): Locale {
   const query = new URL(url).searchParams.get('lang');
@@ -32,9 +33,21 @@ export function localizeMessage(message: string): string {
   if (http) return translate(`${http[1]}: HTTP {status}.`, { status: http[2] });
   return translate(message);
 }
+const localeTag = () => ({ ru: 'ru-RU', kk: 'kk-KZ', en: 'en-US' }[locale]);
 export function formatNumber(value: unknown): string {
   return typeof value === 'number' && Number.isFinite(value)
-    ? value.toLocaleString({ ru: 'ru-RU', kk: 'kk-KZ', en: 'en-US' }[locale], { maximumFractionDigits: 2 }) : '—';
+    ? value.toLocaleString(localeTag(), { maximumFractionDigits: 2 }) : '—';
+}
+/** Fixed number of decimals in the interface language, e.g. 0,22 / 0.22. */
+export function formatDecimal(value: number, min: number, max = min): string {
+  return value.toLocaleString(localeTag(), { minimumFractionDigits: min, maximumFractionDigits: max });
+}
+/** Counted phrases. Russian keys name all three forms; English and Kazakh translations follow their own plural rules. */
+export function translatePlural(count: number, forms: { one: string; few: string; many: string }, values: Record<string, string | number> = {}): string {
+  let category = 'many';
+  try { category = new Intl.PluralRules(localeTag()).select(count); } catch { /* Fall back to the general form. */ }
+  const source = category === 'one' ? forms.one : locale === 'ru' && (category === 'few' || category === 'other') ? forms.few : forms.many;
+  return translate(source, { ...values, count: formatNumber(count) });
 }
 export function languageUrl(value: Locale, current: string): string {
   const url = new URL(current); url.searchParams.set('lang', value); return url.href;

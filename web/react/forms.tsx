@@ -1,8 +1,9 @@
-import { Fragment } from 'react';
-import type { Appeal, Checklist, Criterion, CriterionResult, Scale } from './types';
-import { EmptyState, Icon, label, number } from './shared';
+import { Fragment, type ReactNode } from 'react';
+import type { Appeal, Checklist, Criterion, CriterionResult, Scale, SavedNotice } from './types';
+import { EmptyState, Icon, TurnText, label, number } from './shared';
 import { Slot } from './slots';
-import { translate as t } from './i18n';
+import { translate as t, translatePlural } from './i18n';
+import { turnTime } from './text';
 
 const checklistKey = (checklist: Checklist) => `${checklist.id}@${checklist.version}`;
 
@@ -11,9 +12,26 @@ interface ChecklistEditorProps {
   checklists: Checklist[];
   criterionIndex: number;
   dirty: boolean;
+  saved?: SavedNotice | null;
 }
 
-export function ChecklistEditor({ checklist: cl, checklists, criterionIndex, dirty }: ChecklistEditorProps) {
+/** After a new version is saved: older results keep their totals until they are evaluated again. */
+export function SavedBanner({ notice }: { notice?: SavedNotice | null }) {
+  if (!notice) return null;
+  const stale = notice.stale.length;
+  const version = notice.version;
+  return <div className="saved-banner" role="status" data-reveal>
+    <span className="saved-banner-symbol" aria-hidden="true"><Icon name="circleCheck" /></span>
+    <div className="saved-banner-text">
+      <strong>{translatePlural(notice.criteria, { one: 'Версия {version} сохранена: {count} критерий.', few: 'Версия {version} сохранена: {count} критерия.', many: 'Версия {version} сохранена: {count} критериев.' }, { version })}</strong>
+      {stale > 0 && <p>{translatePlural(stale, { one: '{count} диалог оценён по более ранней версии. Его итог не меняется, пока его не переоценить.', few: '{count} диалога оценены по более ранней версии. Их итоги не меняются, пока их не переоценить.', many: '{count} диалогов оценены по более ранней версии. Их итоги не меняются, пока их не переоценить.' })}</p>}
+    </div>
+    {stale > 0 && <button type="button" className="btn btn-primary" data-action="reevaluate-saved">{translatePlural(stale, { one: 'Переоценить {count} диалог по v{version}', few: 'Переоценить {count} диалога по v{version}', many: 'Переоценить {count} диалогов по v{version}' }, { version })} <Icon name="arrow-right" /></button>}
+    <button type="button" className="icon-btn saved-banner-close" data-action="dismiss-saved" aria-label={t('Закрыть сообщение')} title={t('Закрыть сообщение')}><Icon name="close" /></button>
+  </div>;
+}
+
+export function ChecklistEditor({ checklist: cl, checklists, criterionIndex, dirty, saved }: ChecklistEditorProps) {
   const c = cl.criteria[criterionIndex];
   const hasSavedChecklist = checklists.some(item => item.id === cl.id);
   const editorKey = c ? `${c.id}:${criterionIndex}:${c.answer_type}:${Boolean(c.na_allowed)}:${Boolean(c.gross_error)}` : 'empty';
@@ -26,6 +44,7 @@ export function ChecklistEditor({ checklist: cl, checklists, criterionIndex, dir
         <button className="btn btn-primary" data-action="save-checklist">{t('Сохранить версию')} <Icon name="check" /></button>
       </div>
     </div>
+    <Slot name="checklist-saved" fallback={<SavedBanner notice={saved} />} />
     <div className="editor-toolbar checklist-toolbar" data-reveal>
       <label>{t('Конфигурация')}
         <select id="choose-checklist" defaultValue={hasSavedChecklist ? checklistKey(cl) : ''}>
@@ -112,7 +131,52 @@ export function ScalePreview({ scale }: { scale?: Scale | null }) {
   </>;
 }
 
-export function AppealsView({ appeals, filter }: { appeals: Appeal[]; filter: 'all' | 'open' }) {
+/**
+ * Turn numbers in appeal texts. A message shown in the fragment is highlighted there;
+ * any other message opens the conversation at that message. Numbers outside a known transcript stay plain text.
+ */
+function appealReference(appeal: Appeal, transcriptLength?: number) {
+  const shown = new Set((appeal.fragment || []).map(turn => turn.turn));
+  return (n: number): ReactNode => {
+    if (n < 1 || typeof transcriptLength === 'number' && transcriptLength > 0 && n > transcriptLength) return null;
+    const turn = n - 1;
+    if (shown.has(turn)) return <button type="button" className="turn-ref" data-fragment-appeal={appeal.id} data-fragment-turn={turn} aria-label={t('Показать реплику № {n} во фрагменте', { n })} title={t('Показать реплику № {n} во фрагменте', { n })}>№ {n}</button>;
+    return <button type="button" className="turn-ref" data-context={appeal.id} data-context-turn={turn} aria-label={t('Открыть диалог на реплике № {n}', { n })} title={t('Открыть диалог на реплике № {n}', { n })}>№ {n}</button>;
+  };
+}
+const shorten = (text: unknown, limit = 200) => { const value = String(text ?? '').replace(/\s+/g, ' ').trim(); return value.length > limit ? `${value.slice(0, limit - 1).trimEnd()}…` : value; };
+
+function AppealDispute({ appeal }: { appeal: Appeal }) {
+  const item = appeal.criterion;
+  if (!item) return null;
+  const answer = typeof item.answer === 'number' ? number(item.answer) : label(item.answer);
+  const parts: string[] = [];
+  if (item.gross_error || (item.weight === 0 && item.effective_weight === 0)) parts.push(t('без баллов'));
+  else if (typeof item.points === 'number' && typeof item.effective_weight === 'number') parts.push(t('баллы {points} из {max}', { points: number(item.points), max: number(item.effective_weight) }));
+  if (typeof appeal.total === 'number') parts.push(t('итог диалога {total}', { total: number(appeal.total) }));
+  return <p className="appeal-dispute">{t('Спорная оценка:')} <strong>{answer}</strong>{parts.map(part => <span key={part}> · {part}</span>)}</p>;
+}
+
+function AppealFragment({ appeal }: { appeal: Appeal }) {
+  const fragment = Array.isArray(appeal.fragment) ? appeal.fragment : [];
+  if (!fragment.length) return null;
+  const roles: Record<string, string> = { operator: t('Оператор'), client: t('Клиент'), bot: t('Бот'), system: t('Система') };
+  const evidence = new Set((appeal.criterion?.evidence || []).map(entry => entry.turn));
+  return <section className="appeal-fragment" aria-label={t('Фрагмент диалога')}>
+    <h4>{t('Фрагмент диалога')}</h4>
+    <ol>{fragment.map(turn => {
+      const time = turnTime(turn);
+      const isEvidence = evidence.has(turn.turn);
+      return <li key={turn.turn} id={`appeal-${appeal.id}-turn-${turn.turn}`} tabIndex={-1} className={isEvidence ? 'is-evidence' : ''}>
+        <span className="appeal-fragment-meta">№ {turn.turn + 1} · {roles[turn.speaker ?? ''] || turn.speaker || '—'}{time && ` · ${time}`}</span>
+        {isEvidence && <span className="appeal-fragment-tag">{t('Доказательство')}</span>}
+        <span className="appeal-fragment-text"> — {shorten(turn.text)}</span>
+      </li>;
+    })}</ol>
+  </section>;
+}
+
+export function AppealsView({ appeals, filter, turnCounts = {} }: { appeals: Appeal[]; filter: 'all' | 'open'; turnCounts?: Record<string, number> }) {
   const visible = appeals.filter(appeal => filter === 'all' || appeal.status === 'open');
   return <>
     <div className="page-heading" data-reveal><div><h1>{t('Апелляции')}</h1><p>{t('Сопоставьте комментарий оператора с диалогом и сохраните обоснованное решение.')}</p></div><button className="btn" data-action="retry"><Icon name="rotate" /> {t('Обновить список')}</button></div>
@@ -121,11 +185,14 @@ export function AppealsView({ appeals, filter }: { appeals: Appeal[]; filter: 'a
       {visible.length ? visible.map(appeal => <article className="appeal-card" id={`appeal-${appeal.id}`} key={appeal.id}>
         <div className="appeal-content">
           <div className="appeal-meta"><span className={`badge ${appeal.status === 'open' ? 'badge-amber' : 'badge-green'}`}>{label(appeal.status)}</span><span className="muted small">{appeal.conversation_id || appeal.evaluation_id} · {appeal.criterion_id}</span></div>
-          <h3>{appeal.criterion_title || t('Пересмотр критерия')}</h3>
+          <h3>{appeal.criterion_title || appeal.criterion?.title || t('Пересмотр критерия')}</h3>
+          <AppealDispute appeal={appeal} />
+          {appeal.criterion && (appeal.criterion.reason || appeal.criterion.explanation) && <p className="appeal-reason"><TurnText text={appeal.criterion.reason || appeal.criterion.explanation} reference={appealReference(appeal, turnCounts[appeal.conversation_id ?? ''])} /></p>}
           <div className={`appeal-perspectives ${appeal.decision ? 'has-decision' : ''}`}>
             <section className="appeal-statement"><h4>{t('Комментарий оператора')}</h4><p>{appeal.comment}</p></section>
             {appeal.decision && <section className="appeal-statement appeal-decision"><h4>{t('Решение проверяющего')}</h4><strong className="appeal-answer">{t('Ответ: {answer}', { answer: label(appeal.decision.answer) })}</strong><p>{appeal.decision.reason}</p></section>}
           </div>
+          <AppealFragment appeal={appeal} />
         </div>
         <div className="actions appeal-actions"><button className="btn btn-small" data-context={appeal.id}>{t('Открыть диалог')} <Icon name="arrow-right" /></button>{appeal.status === 'open' && <button className="btn btn-small btn-primary" data-review={appeal.id}>{t('Рассмотреть')}</button>}</div>
         <div className="review-form" id={`review-${appeal.id}`} hidden><Slot name={`review-${appeal.id}`} /></div>
@@ -134,13 +201,24 @@ export function AppealsView({ appeals, filter }: { appeals: Appeal[]; filter: 'a
   </>;
 }
 
-export function ReviewForm({ appeal, criterion, item }: { appeal: Appeal; criterion: Criterion; item: CriterionResult }) {
+/** Answer choices with their meaning: scale steps carry the checklist wording, yes/no/N/A get plain captions. */
+function answerOption(answer: string | number, criterion: Criterion): string {
+  if (typeof answer === 'number') {
+    const step = criterion.scale?.steps?.find(item => item.value === answer);
+    return step?.label ? `${number(answer)} — ${step.label}` : number(answer);
+  }
+  if (answer === 'na') return t('N/A — критерий не применяется');
+  if (criterion.gross_error) return t(answer === 'yes' ? 'Да — нарушение выявлено' : 'Нет — нарушения нет');
+  return t(answer === 'yes' ? 'Да — критерий выполнен' : 'Нет — критерий не выполнен');
+}
+
+export function ReviewForm({ appeal, criterion, item, transcriptLength }: { appeal: Appeal; criterion: Criterion; item: CriterionResult; transcriptLength?: number }) {
   const answers = [...(criterion.answer_type === 'scale' ? (criterion.scale?.steps || []).map(step => step.value) : ['yes', 'no']), ...(criterion.na_allowed ? ['na'] : [])];
   return <form data-decision={appeal.id} className="form-stack appeal-review-layout" data-reveal>
-    <aside className="appeal-current"><span className="editor-eyebrow">{t('Текущая оценка')}</span><h4>{criterion.title}</h4><div className="appeal-current-answer"><span>{t('Ответ по критерию')}</span><strong>{label(item.answer)}</strong></div><p>{item.explanation}</p><button className="text-btn" type="button" data-context={appeal.id}>{t('Проверить фрагмент диалога')} <Icon name="arrow-right" /></button></aside>
+    <aside className="appeal-current"><span className="editor-eyebrow">{t('Текущая оценка')}</span><h4>{criterion.title}</h4><div className="appeal-current-answer"><span>{t('Ответ по критерию')}</span><strong>{label(item.answer)}</strong></div><p><TurnText text={item.explanation} reference={appealReference(appeal, transcriptLength)} /></p><button className="text-btn" type="button" data-context={appeal.id}>{t('Проверить фрагмент диалога')} <Icon name="arrow-right" /></button></aside>
     <div className="form-stack appeal-review-fields">
       <fieldset className="appeal-review-choice"><legend>{t('Решение проверяющего')}</legend><div className="radio-row"><label><input type="radio" name="decision-status" value="confirmed" defaultChecked /><span>{t('Подтвердить оценку')}</span></label><label><input type="radio" name="decision-status" value="changed" /><span>{t('Изменить оценку')}</span></label></div></fieldset>
-      <label>{t('Ответ после рассмотрения')}<select name="answer" data-original={item.answer} defaultValue={String(item.answer)} disabled>{answers.map(answer => <option key={String(answer)} value={answer}>{label(answer)}</option>)}</select><span className="editor-help">{t('Для выбора другого ответа отметьте «Изменить оценку».')}</span></label>
+      <label>{t('Ответ после рассмотрения')}<select name="answer" data-original={item.answer} defaultValue={String(item.answer)} disabled>{answers.map(answer => <option key={String(answer)} value={answer}>{answerOption(answer, criterion)}</option>)}</select><span className="editor-help">{t('Для выбора другого ответа отметьте «Изменить оценку».')}</span></label>
       <label>{t('Причина решения')}<textarea name="reason" required maxLength={4000} placeholder={t('Объясните, что подтверждает решение')} /></label>
       <div className="actions appeal-review-actions"><button className="btn btn-primary" type="submit">{t('Сохранить решение')}</button><button className="btn" type="button" data-cancel-review={appeal.id}>{t('Отмена')}</button></div>
     </div>
