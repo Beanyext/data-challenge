@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Разметка эталона</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --text: #1c2330; --muted: #667085; --line: #e2e5ea;
+    --accent: #0f7a4f; --accent-bg: #e7f5ee; --accent-line: #b5dcc6;
+    --warn: #b42318; --warn-bg: #fdecea;
+    --hold: #7a4b00; --hold-bg: #fff3d6;
+    --op: #e9f1fe; --op-line: #c9dbfb; --bot: #f0f1f3;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--text);
+         background: var(--bg); display: flex; flex-direction: column; }
+  header { display: flex; gap: 10px 14px; align-items: center; flex-wrap: wrap; padding: 10px 16px;
+           background: var(--panel); border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 15px; margin: 0 8px 0 0; }
+  .progress { color: var(--muted); }
+  .progress b { color: var(--text); }
+  select, button { font: inherit; }
+  select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; max-width: 100%; }
+  .btn { padding: 5px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; }
+  .btn:hover { border-color: #c4c9d1; }
+  .status { margin-left: auto; color: var(--muted); font-size: 13px; }
+  .status.error { color: var(--warn); }
+  main { flex: 1; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr); min-height: 0; }
+  #left, #right { overflow: auto; padding: 14px 16px 40px; }
+  #left { border-right: 1px solid var(--line); }
+  .banner { padding: 8px 12px; border-radius: 8px; margin-bottom: 12px; font-size: 13px; }
+  .banner.holdout { background: var(--hold-bg); color: var(--hold); }
+  .banner.tune { background: var(--accent-bg); color: var(--accent); }
+  .meta { color: var(--muted); margin-bottom: 8px; }
+  .turn { display: grid; grid-template-columns: 40px 46px 1fr; gap: 8px; padding: 6px 10px; border-radius: 6px;
+          margin-bottom: 4px; border: 1px solid transparent; }
+  .turn .n, .turn .t { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; padding-top: 1px; }
+  .turn .role { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+  .turn .text { white-space: pre-wrap; word-break: break-word; }
+  .turn.operator { background: var(--op); border-color: var(--op-line); }
+  .turn.operator .role { color: #1d4ed8; }
+  .turn.client { background: var(--panel); border-color: var(--line); }
+  .turn.bot, .turn.system { background: var(--bot); color: #4b5563; }
+  .turn.system .text { font-style: italic; }
+  .total { position: sticky; top: -14px; z-index: 1; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+           padding: 10px 12px; margin: 0 0 12px; display: flex; gap: 6px 16px; flex-wrap: wrap; align-items: baseline; }
+  .total .big { font-size: 20px; font-weight: 700; }
+  .total .gross { color: var(--warn); font-weight: 600; }
+  details.guide { margin-bottom: 12px; color: #374151; }
+  details.guide summary { cursor: pointer; color: var(--muted); }
+  details.guide li { margin: 4px 0; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 16px 0 8px; }
+  .crit { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+  .crit.answered { border-color: var(--accent-line); }
+  .crit.unsure { box-shadow: inset 3px 0 0 #f59e0b; }
+  .crit .head { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; }
+  .crit .badge { font-weight: 500; font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .crit p { margin: 4px 0; }
+  .crit .na { color: var(--muted); font-size: 13px; }
+  .crit details { font-size: 13px; color: #374151; margin: 4px 0; }
+  .crit details summary { cursor: pointer; color: var(--muted); }
+  .opts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .opts.scale { flex-direction: column; }
+  .opt { padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; text-align: left; }
+  .opt:hover { border-color: var(--accent-line); }
+  .opt.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .opt.on.bad { background: var(--warn); border-color: var(--warn); }
+  .opt .v { font-weight: 700; margin-right: 6px; }
+  label.unsure { display: inline-flex; gap: 6px; align-items: center; margin-top: 8px; color: var(--muted); font-size: 13px; cursor: pointer; }
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; overflow: auto; }
+    #left, #right { overflow: visible; }
+    #left { border-right: 0; border-bottom: 1px solid var(--line); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Разметка эталона</h1>
+  <span class="progress" id="progress"></span>
+  <select id="pick" aria-label="Диалог"></select>
+  <button class="btn" id="prev" title="Предыдущий диалог">&larr; Назад</button>
+  <button class="btn" id="next" title="Следующий диалог">Вперёд &rarr;</button>
+  <button class="btn" id="nextOpen">Следующий неразмеченный</button>
+  <span class="status" id="status">Загрузка…</span>
+</header>
+<main>
+  <section id="left" aria-label="Транскрипт"></section>
+  <section id="right" aria-label="Критерии"></section>
+</main>
+<script>
+"use strict";
+const ROLE = { client: "Клиент", operator: "Оператор", bot: "Бот", system: "Система" };
+const S = { checklist: null, dialogs: [], labels: {}, complete: {}, idx: 0, queue: Promise.resolve() };
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined && text !== null) e.textContent = text;
+  return e;
+}
+
+async function api(path, body) {
+  const opt = body === undefined ? {} :
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+  const r = await fetch(path, opt);
+  const data = await r.json().catch(() => ({ error: "ответ сервера не JSON" }));
+  if (!r.ok) throw new Error(data.error || ("ошибка " + r.status));
+  return data;
+}
+
+function setStatus(text, isError) {
+  const s = document.getElementById("status");
+  s.textContent = text;
+  s.className = "status" + (isError ? " error" : "");
+}
+
+const dialog = () => S.dialogs[S.idx];
+function label() {
+  const id = dialog().id;
+  if (!S.labels[id]) S.labels[id] = { answers: {}, unsure: [], draft: "none" };
+  return S.labels[id];
+}
+
+function options(c) {
+  let opts;
+  if (c.gross_error) {
+    opts = [{ value: "yes", text: "Нарушение есть", bad: true }, { value: "no", text: "Нарушений нет" }];
+  } else if (c.answer_type === "scale") {
+    let steps = (c.scale && c.scale.steps && c.scale.steps.length) ? c.scale.steps.slice() : [];
+    if (!steps.length) for (let v = c.scale.max; v >= c.scale.min; v--) steps.push({ value: v, label: "" });
+    steps.sort((a, b) => b.value - a.value);
+    opts = steps.map(s => ({ value: s.value, num: String(s.value), text: s.label || "" }));
+  } else {
+    opts = [{ value: "yes", text: "Да" }, { value: "no", text: "Нет" }];
+  }
+  if (c.na_allowed && !c.gross_error) opts.push({ value: "na", text: "N/A" });
+  return opts;
+}
+
+function renderHeader() {
+  const parts = { holdout: [0, 0], tune: [0, 0] };
+  for (const d of S.dialogs) { parts[d.part][1]++; if (S.complete[d.id]) parts[d.part][0]++; }
+  const p = document.getElementById("progress");
+  p.replaceChildren(
+    document.createTextNode("Отложенные "), el("b", "", parts.holdout[0] + "/" + parts.holdout[1]),
+    document.createTextNode(" · Настроечные "), el("b", "", parts.tune[0] + "/" + parts.tune[1]));
+  const pick = document.getElementById("pick");
+  pick.replaceChildren(...S.dialogs.map((d, i) => {
+    const o = el("option", "", (S.complete[d.id] ? "готово · " : "") + d.id + " · " +
+      (d.channel === "voice call" ? "звонок" : "чат") + " " + d.language + " · " +
+      (d.part === "holdout" ? "отложенный" : "настроечный"));
+    o.value = String(i);
+    return o;
+  }));
+  pick.value = String(S.idx);
+}
+
+function renderTranscript() {
+  const d = dialog();
+  const left = document.getElementById("left");
+  const banner = el("div", "banner " + d.part, d.part === "holdout"
+    ? "Отложенный диалог: размечай сам, без подсказок модели. На нём замеряем итоговую точность."
+    : "Настроечный диалог: на нём подбираем запрос к модели.");
+  const meta = el("div", "meta", d.id + " · " + (d.channel === "voice call" ? "звонок" : "чат") + " · " +
+    d.language + " · реплик " + d.turns.length);
+  const turns = d.turns.map(t => {
+    const row = el("div", "turn " + (t.speaker || ""));
+    const body = el("div");
+    body.append(el("span", "role", ROLE[t.speaker] || t.speaker), el("span", "text", t.text));
+    row.append(el("span", "n", "#" + t.i), el("span", "t", t.time), body);
+    return row;
+  });
+  left.replaceChildren(banner, meta, ...turns);
+  left.scrollTop = 0;
+}
+
+function renderCriteria() {
+  const c = S.checklist, lab = label();
+  const right = document.getElementById("right");
+  const scrollTop = right.scrollTop;
+  const nodes = [el("div", "total")];
+  nodes[0].id = "total";
+  if (c.guidance && c.guidance.length) {
+    const g = el("details", "guide");
+    g.append(el("summary", "", "Общие правила оценки"));
+    const ul = el("ul");
+    c.guidance.forEach(t => ul.append(el("li", "", t)));
+    g.append(ul);
+    nodes.push(g);
+  }
+  const sections = c.sections || [];
+  const known = new Set(sections.map(s => s.id));
+  for (const s of sections) {
+    const crits = c.criteria.filter(x => x.section_id === s.id);
+    if (!crits.length) continue;
+    nodes.push(el("h2", "", s.name || s.id));
+    for (const cr of crits) nodes.push(renderCriterion(cr, lab));
+  }
+  const orphans = c.criteria.filter(x => !known.has(x.section_id));
+  if (orphans.length && known.size) nodes.push(el("h2", "", "Без секции"));
+  for (const cr of orphans) nodes.push(renderCriterion(cr, lab));
+  right.replaceChildren(...nodes);
+  right.scrollTop = scrollTop;
+}
+
+function renderCriterion(cr, lab) {
+  const answered = Object.prototype.hasOwnProperty.call(lab.answers, cr.id);
+  const unsure = lab.unsure.includes(cr.id);
+  const card = el("div", "crit" + (answered ? " answered" : "") + (unsure ? " unsure" : ""));
+  const head = el("div", "head");
+  head.append(el("span", "", cr.id + " · " + cr.title), el("span", "badge", cr.gross_error ? "без баллов" : "вес " + cr.weight));
+  card.append(head);
+  if (cr.description) card.append(el("p", "", cr.description));
+  if (cr.na_allowed && cr.na_rule) card.append(el("p", "na", "N/A — " + cr.na_rule));
+  if (cr.notes) {
+    const det = el("details");
+    det.append(el("summary", "", "Пояснения"), el("p", "", cr.notes));
+    card.append(det);
+  }
+  const box = el("div", "opts" + (cr.answer_type === "scale" && !cr.gross_error ? " scale" : ""));
+  for (const o of options(cr)) {
+    const on = answered && String(lab.answers[cr.id]) === String(o.value);
+    const b = el("button", "opt" + (on ? " on" : "") + (on && o.bad ? " bad" : ""));
+    b.type = "button";
+    if (o.num !== undefined) b.append(el("span", "v", o.num));
+    if (o.text) b.append(document.createTextNode(o.text));
+    b.addEventListener("click", () => setAnswer(cr.id, o.value));
+    box.append(b);
+  }
+  card.append(box);
+  const u = el("label", "unsure");
+  const cb = el("input");
+  cb.type = "checkbox";
+  cb.checked = unsure;
+  cb.addEventListener("change", () => toggleUnsure(cr.id, cb.checked));
+  u.append(cb, document.createTextNode("сомневаюсь"));
+  card.append(u);
+  return card;
+}
+
+function renderTotal(sc) {
+  const box = document.getElementById("total");
+  if (!box || !sc) return;
+  const n = S.checklist.criteria.length, filled = n - sc.missing.length;
+  box.replaceChildren(
+    el("span", "big", sc.total === null ? "—" : String(sc.total)),
+    el("span", "", "баллы " + (sc.points ?? "—") + " из " + (sc.weight_sum ?? "—")),
+    el("span", sc.gross_error ? "gross" : "", "грубая ошибка: " + (sc.gross_error ? "да" : "нет")),
+    el("span", "", "заполнено " + filled + " из " + n));
+}
+
+async function refreshTotal() {
+  try { renderTotal(await api("/api/score", { answers: label().answers })); }
+  catch (e) { setStatus("Не посчитан итог: " + e.message, true); }
+}
+
+function save() {
+  const id = dialog().id;
+  S.queue = S.queue.then(async () => {
+    const lab = S.labels[id];
+    setStatus("Сохраняю…");
+    try {
+      const r = await api("/api/labels/" + encodeURIComponent(id), { answers: lab.answers, unsure: lab.unsure, draft: lab.draft || "none" });
+      S.complete[id] = r.complete;
+      if (dialog().id === id) renderTotal(r.score);
+      renderHeader();
+      setStatus("Сохранено " + new Date().toLocaleTimeString("ru-RU"));
+    } catch (e) {
+      setStatus("Не сохранено: " + e.message, true);
+    }
+  });
+}
+
+function setAnswer(cid, value) {
+  const lab = label();
+  if (Object.prototype.hasOwnProperty.call(lab.answers, cid) && String(lab.answers[cid]) === String(value)) delete lab.answers[cid];
+  else lab.answers[cid] = value;
+  renderCriteria();
+  save();
+}
+
+function toggleUnsure(cid, on) {
+  const lab = label();
+  lab.unsure = lab.unsure.filter(x => x !== cid);
+  if (on) lab.unsure.push(cid);
+  renderCriteria();
+  save();
+}
+
+function go(i) {
+  if (i < 0 || i >= S.dialogs.length) return;
+  S.idx = i;
+  if (location.hash.slice(1) !== dialog().id) history.replaceState(null, "", "#" + dialog().id);
+  renderHeader();
+  renderTranscript();
+  renderCriteria();
+  refreshTotal();
+}
+
+function nextOpen() {
+  for (let k = 1; k <= S.dialogs.length; k++) {
+    const i = (S.idx + k) % S.dialogs.length;
+    if (!S.complete[S.dialogs[i].id]) return go(i);
+  }
+  setStatus("Все диалоги размечены");
+}
+
+async function load() {
+  try {
+    const st = await api("/api/state");
+    Object.assign(S, { checklist: st.checklist, dialogs: st.dialogs, labels: st.labels, complete: st.complete });
+    for (const id in S.labels) S.labels[id].unsure = S.labels[id].unsure || [];
+    const fromHash = S.dialogs.findIndex(d => d.id === location.hash.slice(1));
+    const firstOpen = S.dialogs.findIndex(d => !S.complete[d.id]);
+    go(fromHash >= 0 ? fromHash : Math.max(firstOpen, 0));
+    setStatus("Готово к разметке");
+  } catch (e) {
+    setStatus("Не загрузилось: " + e.message, true);
+  }
+}
+
+document.getElementById("pick").addEventListener("change", e => go(Number(e.target.value)));
+document.getElementById("prev").addEventListener("click", () => go(S.idx - 1));
+document.getElementById("next").addEventListener("click", () => go(S.idx + 1));
+document.getElementById("nextOpen").addEventListener("click", nextOpen);
+window.addEventListener("hashchange", () => {
+  const i = S.dialogs.findIndex(d => d.id === location.hash.slice(1));
+  if (i >= 0 && i !== S.idx) go(i);
+});
+load();
+</script>
+</body>
+</html>
