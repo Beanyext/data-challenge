@@ -6,6 +6,10 @@ altair==6.3.0 \
     --hash=sha256:7defb6ca730676dfc99a299768e2769f51585fcb3dc960ea71aacc368929d65e \
     --hash=sha256:fa632121aca6d0fcb198a3d8a9f7d937fa5b7518ec947951cfffb44e736d97c8
     # via streamlit
+annotated-doc==0.0.5 \
+    --hash=sha256:117bac03a25ede5df5440e855b32d556049ca169ead221505badf432fed4b101 \
+    --hash=sha256:c7e58ce09192557605d8bbd92836d7e1d520ac9580096042c0bfd197efacf1bb
+    # via fastapi
 annotated-types==0.8.0 \
     --hash=sha256:13b2beaad985e05e2d6407ee4c4f35590b11f8d693a258a561055cac8f64cab7 \
     --hash=sha256:f072f4d804ea359e4eaf198b1af7a8b0943881a87f31bb764f8bf219bb9419e0
@@ -584,6 +588,10 @@ executing==2.3.0 \
     --hash=sha256:15919cb5d667e5cb4e099511971d00d659573fff2dd5c4e6cd8b71636c7858d2 \
     --hash=sha256:736e859c9f8701f11fcf516856f26f562e04776387824b43a35a1dfe21c84122
     # via stack-data
+fastapi==0.162.0 \
+    --hash=sha256:3785963de305dd09912426cb81f2d230fce98ab3521cdfe97265c8d14983128c \
+    --hash=sha256:6a22c1e2e6e32e0633ee7e170f00009a29b8228b16feb219ee42f32fd8d88a8f
+    # via -r requirements.in
 fastjsonschema==2.22.2 \
     --hash=sha256:0fb3915616adac85ccfdd737d26be1089845d2019819505b42d39888458f74d4 \
     --hash=sha256:72064e12356a7d6ef02165be2946b9abadbdf238536e07eb587e3dbaa33099cf
@@ -1445,7 +1453,9 @@ openpyxl==3.1.5 \
 opentelemetry-api==1.45.1 \
     --hash=sha256:aa38ed19bcc084ba42782a73255b3582283eced7ad6dddbd6695189e69adfb75 \
     --hash=sha256:b31553efa588ae44bc306f863c785c5333a9ecc091248c6ee68b4b6c87fdedfb
-    # via anthropic
+    # via
+    #   anthropic
+    #   fastapi
 optuna==5.0.0 \
     --hash=sha256:358bb878b7b1e20e90dc944ac4261796dd3d5c2b7860aa960a08fc10e0b5beff \
     --hash=sha256:5fff892ae6baf4948c810c5b8635ec67e08efb0709b41cb73b14e30391d44720
@@ -1755,7 +1765,9 @@ pycparser==3.12 \
 pydantic==2.14.1 \
     --hash=sha256:9195d967ec791692a04438115466764fb8b9a27b31f14a760437694f40d6b454 \
     --hash=sha256:94f478203dd03404682a1ada216965651dd74b1d2d5ffd62e00e0837caab5c26
-    # via anthropic
+    # via
+    #   anthropic
+    #   fastapi
 pydantic-core==2.50.1 \
     --hash=sha256:0036473f5583e6a60e50b8b21651511564277a3f05cc5dab8cf579f552cd5f6c \
     --hash=sha256:0048b6dddc8ef4b64fccaad878bd143b0c3882ea9936279dc11d613f6b7dd1bc \
@@ -1930,7 +1942,9 @@ python-json-logger==4.2.0 \
 python-multipart==0.0.32 \
     --hash=sha256:be54b7f3fa167bb83e4fcd936b887b708f4e57fe75911c02aebf53efaf8d938e \
     --hash=sha256:ff6d3f776f16878c894e52e107296ffc890e913c611b1a4ec6c44e2821fe2e23
-    # via streamlit
+    # via
+    #   -r requirements.in
+    #   streamlit
 pywinpty==3.1.0 \
     --hash=sha256:04c6ea57c118f920d03e008dea7a06a8b735e4dd41fe7df8414e9b658f719aed \
     --hash=sha256:08afc428ec8765f2b8b9a9954727e1dafbefcb5912acc65952007779449650a1 \
@@ -2538,7 +2552,9 @@ stack-data==0.6.3 \
 starlette==1.9.0 \
     --hash=sha256:3d931de246ed870e35ce605974440816ef895e592f255d1396cfdf191d4c4318 \
     --hash=sha256:fd3f159936e882d06c1108f84688f7cda2cf85fc6a592a50edbd175e882c2ddc
-    # via streamlit
+    # via
+    #   fastapi
+    #   streamlit
 statsmodels==0.15.0 \
     --hash=sha256:04e65ee05475aeceb9cb954cf96c0f9361b9cdfd497b8aae47afbab0c7c786dd \
     --hash=sha256:081adf7e5f2da63f63cbd90491447de5d4c4c2921f19814f235bcf3e736edd3c \
@@ -2702,6 +2718,7 @@ typing-extensions==4.16.0 \
     #   anthropic
     #   anyio
     #   beautifulsoup4
+    #   fastapi
     #   formulaic
     #   httpx2
     #   jupyter-client
@@ -2716,7 +2733,9 @@ typing-extensions==4.16.0 \
 typing-inspection==0.4.4 \
     --hash=sha256:547274fa6b0a561ccf549cc9524b999a578e737d015d8709d021f9d0d13bea47 \
     --hash=sha256:65b8397ba37ccbce054456aaccddfc91e6e3083c92824df348d96ca832f3f147
-    # via pydantic
+    # via
+    #   fastapi
+    #   pydantic
 tzdata==2026.5 \
     --hash=sha256:8cc73c0a0bfca7dbfa59235d60b2eff82231dee33f53d206db1acd9173cfc0a7 \
     --hash=sha256:b683bd1b6659ddcd810ff02ad09ba821d4bf1065072805063eb35c49617905ac
@@ -2735,7 +2754,9 @@ urllib3==2.8.0 \
 uvicorn==0.54.0 \
     --hash=sha256:505bdb0f318731d45f1f712071fc781a8981f6847a31c902c9f5e652d4f67faf \
     --hash=sha256:a2e33cbfaa0306f8e6b0c13e0cb89d7d7a2da3e62b90c66e18c33d9807b28620
-    # via streamlit
+    # via
+    #   -r requirements.in
+    #   streamlit
 watchdog==6.0.0 \
     --hash=sha256:07df1fdd701c5d4c8e55ef6cf55b8f0120fe1aef7ef39a1c6fc6bc2e606d517a \
     --hash=sha256:20ffe5b202af80ab4266dcd3e91aae72bf2da48c0d33bdb15c66658e685e94e2 \
