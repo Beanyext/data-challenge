@@ -5,10 +5,47 @@
 
 from __future__ import annotations
 
+import re
+
+from app.evaluator.dialog import display_times
 from app.scoring import NA, ScoringError, apply_decisions, normalize_answer, score
 from app.server.store import Store
 
 FRAGMENT_PAD = 2
+_TURN_REF = re.compile(r"\[(\d+)\]")
+_BASIS_TAIL = re.compile(r"\s*Основание\s*[—–-].*$", re.S)
+_LEAD = re.compile(r"^[^—.]{0,120}—\s*[^.]{0,40}\.\s*")
+_MMSS = re.compile(r"^(\d+):(\d{2})$")
+
+
+def human_turns(text):
+    """Модель пишет номера реплик с нуля, транскрипт в интерфейсе нумерует с единицы: «[9]» -> «[10]».
+    Хранится исходный текст модели; файл сдачи сдвигает номера сам (app/results/export.py)."""
+    if not isinstance(text, str):
+        return text
+    return _TURN_REF.sub(lambda m: f"[{int(m.group(1)) + 1}]", text)
+
+
+def short_reason(explanation, title=None) -> str:
+    """Причина одной фразой для списков и сводки: без вступления «Критерий — ответ.» и хвоста «Основание — реплики …»."""
+    full = human_turns(str(explanation or "")).strip()
+    text = full
+    if title and text.lower().startswith(str(title).lower()[:12]):
+        text = _LEAD.sub("", text, count=1)
+    text = _BASIS_TAIL.sub("", text).strip() or full
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    out = sentences[0]
+    if len(out) < 40 and len(sentences) > 1:
+        out = f"{out} {sentences[1]}"
+    return out[:280]
+
+
+def _turns_with_time(transcript: list[dict]) -> tuple[list[dict], int | None]:
+    """Реплики с полем display_time («00:14» от начала разговора) и длительность в секундах."""
+    times = display_times(transcript) if transcript else []
+    turns = [{**t, "display_time": times[i]} for i, t in enumerate(transcript)]
+    m = _MMSS.match(times[-1]) if times else None
+    return turns, (int(m.group(1)) * 60 + int(m.group(2))) if m else None
 
 
 def criterion_by_id(checklist: dict) -> dict:
@@ -52,8 +89,9 @@ def evaluation_view(store: Store, ev: dict, with_appeals: bool = True) -> dict:
             "answer": sc["answer"], "original_answer": original.get(c["id"]),
             "points": sc["score"], "raw_points": sc["points"], "weight": sc["weight"],
             "effective_weight": sc["effective_weight"], "applicable": sc["applicable"], "gross_error": sc["gross_error"],
-            "explanation": it.get("explanation", ""), "evidence": it.get("evidence") or [],
-            "checked_range": it.get("checked_range"), "na_reason": it.get("na_reason"),
+            "explanation": human_turns(it.get("explanation", "")), "reason": short_reason(it.get("explanation"), c.get("title")),
+            "evidence": it.get("evidence") or [],
+            "checked_range": it.get("checked_range"), "na_reason": human_turns(it.get("na_reason")),
             "needs_review": bool(it.get("needs_review")) and dec is None, "problems": it.get("problems") or [],
             "decision": None if dec is None else {k: dec[k] for k in ("appeal_id", "status", "answer", "reason", "decided_at")},
             "review_reason": None if dec is None else dec["reason"],
@@ -87,8 +125,9 @@ def dialog_row(store: Store, entry: dict, latest: dict | None) -> dict:
     row = {
         "conversation_id": record["conversation_id"], "channel": record.get("channel"), "language": record.get("language"),
         "group_id": entry.get("group_id"), "turns": len(transcript), "title": first_client[:90],
+        "duration_seconds": _turns_with_time(transcript)[1],
         "has_audio": bool(record.get("audio_url")), "evaluation_id": None, "status": "new",
-        "total": None, "original_total": None, "gross_error": False, "needs_review": False,
+        "total": None, "original_total": None, "gross_error": False, "gross_error_reason": None, "needs_review": False,
         "checklist_id": None, "checklist_version": None, "model": None, "open_appeals": 0,
     }
     if latest is None:
@@ -101,6 +140,7 @@ def dialog_row(store: Store, entry: dict, latest: dict | None) -> dict:
         "needs_review": view["needs_review_count"] > 0, "checklist_id": view["checklist_id"],
         "checklist_version": view["checklist_version"], "model": view.get("model"),
         "open_appeals": len(store.list_appeals(status="open", evaluation_id=latest["id"])),
+        "gross_error_reason": next((c["reason"] for c in view["criteria"] if c["gross_error"] and c["answer"] == "yes"), None),
     })
     if view["status"] == "error":
         row["error"] = view.get("error")
@@ -112,6 +152,7 @@ def public_dialog(entry: dict) -> dict:
     record = {k: v for k, v in entry["record"].items() if k != "audio_url"}
     record["has_audio"] = bool(entry["record"].get("audio_url"))
     record["group_id"] = entry.get("group_id")
+    record["transcript"], record["duration_seconds"] = _turns_with_time(record.get("transcript") or [])
     return record
 
 
@@ -129,7 +170,7 @@ def appeal_view(store: Store, appeal: dict) -> dict:
     out["total"] = view["total"]
     out["original_total"] = view["original_total"]
     entry = store.get_dialog(ev["conversation_id"])
-    transcript = (entry or {}).get("record", {}).get("transcript") or []
+    transcript, _ = _turns_with_time((entry or {}).get("record", {}).get("transcript") or [])
     turns = sorted({e["turn"] for e in (item or {}).get("evidence", []) if isinstance(e.get("turn"), int)})
     rng = (item or {}).get("checked_range")
     if rng:
@@ -140,7 +181,7 @@ def appeal_view(store: Store, appeal: dict) -> dict:
         lo, hi = 0, min(len(transcript) - 1, 2 * FRAGMENT_PAD)
     out["fragment"] = [
         {"turn": i, "speaker": transcript[i].get("speaker"), "timestamp": transcript[i].get("timestamp"),
-         "text": transcript[i].get("text")}
+         "display_time": transcript[i].get("display_time"), "text": transcript[i].get("text")}
         for i in range(lo, hi + 1)
     ] if transcript else []
     return out
@@ -151,4 +192,5 @@ def allowed_answer(criterion: dict, answer):
     return normalize_answer(criterion, answer)
 
 
-__all__ = ["NA", "ScoringError", "allowed_answer", "appeal_view", "criterion_by_id", "dialog_row", "evaluation_view", "public_dialog"]
+__all__ = ["NA", "ScoringError", "allowed_answer", "appeal_view", "criterion_by_id", "dialog_row", "evaluation_view",
+           "human_turns", "public_dialog", "short_reason"]

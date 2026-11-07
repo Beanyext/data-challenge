@@ -89,7 +89,8 @@ class Runner:
     def __init__(self, store: Store, provider_name: str, workers: int):
         self.store = store
         self.provider_name = provider_name
-        self.pool = ThreadPoolExecutor(max_workers=max(1, workers), thread_name_prefix="cqa-eval")
+        self.workers = max(1, workers)
+        self.pool = ThreadPoolExecutor(max_workers=self.workers, thread_name_prefix="cqa-eval")
 
     def provider(self):
         return MockProvider() if self.provider_name == "mock" else AnthropicProvider()
@@ -163,7 +164,9 @@ def create_app(db_path: str | Path | None = None, provider: str | None = None, w
     def health():
         return {"ok": True, "provider": provider_name,
                 "model": os.environ.get("CQA_MODEL", "claude-opus-5-5") if provider_name == "anthropic" else "mock",
-                "dialogs": len(store.list_dialogs()), "checklists": len(store.latest_checklists())}
+                "dialogs": len(store.list_dialogs()), "checklists": len(store.latest_checklists()),
+                # для окна оценки: сколько стоит и сколько ждать; в тестовом режиме не заполняется
+                "estimate": {**store.evaluation_stats(), "workers": runner.workers}}
 
     # --- диалоги -------------------------------------------------------------
 

@@ -143,6 +143,25 @@ class Store:
             row = self._one("SELECT body_json FROM checklists WHERE id = ? AND version = ?", (cid, version))
         return None if row is None else json.loads(row["body_json"])
 
+    def evaluation_stats(self, limit: int = 200) -> dict:
+        """Средняя цена и время оценки одного диалога по последним настоящим оценкам (тестовый режим не в счёт)."""
+        rows = self._all("SELECT result_json FROM evaluations WHERE status = 'done' ORDER BY finished_at DESC LIMIT ?", (limit,))
+        costs, seconds = [], []
+        for r in rows:
+            res = json.loads(r["result_json"] or "{}")
+            if res.get("provider") == "mock":
+                continue
+            if isinstance(res.get("cost_usd"), (int, float)):
+                costs.append(float(res["cost_usd"]))
+            s = sum(float(c.get("seconds") or 0) for c in res.get("calls") or [])
+            if s > 0:
+                seconds.append(s)
+        return {
+            "based_on": len(costs),
+            "cost_per_dialog_usd": round(sum(costs) / len(costs), 4) if costs else None,
+            "seconds_per_dialog": round(sum(seconds) / len(seconds), 1) if seconds else None,
+        }
+
     def latest_checklists(self) -> list[dict]:
         rows = self._all(
             "SELECT c.body_json FROM checklists c JOIN (SELECT id, MAX(version) AS v FROM checklists GROUP BY id) m "
