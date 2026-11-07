@@ -27,3 +27,6 @@ ipykernel
 nbconvert
 pytest
 tqdm
+
+# Вызов модели Claude для оценки диалогов
+anthropic
