@@ -81,8 +81,8 @@
   .section-bars { margin-top: 12px; }
   .result-losses, .result-total-revision, .result-critical-banner, .result-review-banner { margin: 18px 20px; border-radius: 6px; box-shadow: none; }
   .result-losses { padding: 0; border: 0; background: transparent; }
-  .loss-row { padding: 12px 0; grid-template-columns: 44px minmax(0,1fr); gap: 6px 10px; }
-  .loss-value { background: transparent; padding-left: 0; justify-content: flex-start; font-size: 17px; }
+  .loss-row { padding: 12px 0; grid-template-columns: minmax(64px, max-content) minmax(0,1fr); gap: 6px 12px; }
+  .loss-value { background: transparent; padding-left: 0; justify-content: flex-start; font-size: 17px; white-space: nowrap; }
   .loss-actions { gap: 6px; }
   .loss-actions .btn { border: 0; background: transparent; padding: 5px 0; margin-right: 8px; }
   .result-total-revision { padding: 12px 0; border: 0; border-top: 1px solid #e0e8e2; border-bottom: 1px solid #e0e8e2; background: transparent; }

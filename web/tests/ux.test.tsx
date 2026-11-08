@@ -44,14 +44,14 @@ test('turn numbers in explanations open message N-1; numbers outside the transcr
   assert.equal(document.querySelector('.result-row .turn-ref'), null, 'collapsed row shows plain numbers inside its button');
 });
 
-test('one total summary, collapsed section bars and lost points ordered by size with actions', () => {
+test('one total summary, open section bars and lost points ordered by size with actions', () => {
   const data = fixture();
   const document = dom(renderToStaticMarkup(<><DialogWorkspaceSummary evaluation={data.evaluation}/><EvaluationView {...data}/></>));
   assert.equal(document.querySelectorAll('.review-summary-score').length, 1);
   assert.equal(document.querySelector('.review-summary-score strong')!.textContent, '39,29 / 100');
   assert.equal(document.querySelector('.result-ring'), null);
   const sections = document.querySelector<HTMLDetailsElement>('.result-section-details')!;
-  assert.equal(sections.open, false, 'section breakdown is optional');
+  assert.equal(sections.open, true, 'section breakdown is visible at once and can be collapsed');
   assert.equal(sections.querySelector('summary')!.textContent, 'Результаты секций');
   assert.deepEqual([...sections.querySelectorAll('.section-bar-name')].map(node => node.textContent), ['Начало', 'Решение'], 'sections without points are not drawn');
   const rows = [...document.querySelectorAll('.loss-row')];

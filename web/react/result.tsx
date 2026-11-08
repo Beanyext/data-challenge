@@ -200,7 +200,7 @@ const sectionMax = (section: Section) => typeof section.max === 'number' ? secti
 function ResultOverview({ evaluation, sections, names, criteriaCount }: { evaluation: Evaluation; sections: Section[]; names: Section[]; criteriaCount: number }) {
   return <div className="result-overview">
       <p className="result-overview-meta">{t('Чек-лист')} <strong>v{evaluation.checklist_version ?? '—'}</strong> · {t('Критериев')} <strong>{criteriaCount}</strong></p>
-      {sections.length > 0 && <details className="result-section-details">
+      {sections.length > 0 && <details className="result-section-details" open>
         <summary>{t('Результаты секций')}</summary>
         <ul className="section-bars">{sections.map((section, index) => {
           const max = sectionMax(section) as number;
