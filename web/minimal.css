@@ -122,6 +122,14 @@
   .kpi-bar .kpi-value { font-size: 17px; color: #20382e; }
   .kpi-bar .kpi-danger .kpi-value { color: #a03429; }
   .kpi-bar .kpi-unit { font-size: 13px; font-weight: 500; color: #53675c; }
+  .dialog-nav-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 14px; }
+  .dialog-nav-row .back-link { margin-bottom: 0; }
+  .dialog-pager { display: flex; align-items: center; gap: 8px; }
+  .dialog-pager .btn { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+  .dialog-pager .btn[disabled] { opacity: .45; cursor: default; }
+  .dialog-pager .pager-prev .ui-icon { transform: scaleX(-1); }
+  .dialog-pager .pager-position { min-width: 52px; text-align: center; color: #53675c; font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  @media (max-width: 560px) { .dialog-pager .pager-label { display: none; } .dialog-pager .btn { min-width: 40px; justify-content: center; } }
   .kpi-bar .kpi-action:hover .kpi-label, .kpi-bar .kpi-action[aria-pressed=true] .kpi-label { color: #096246; text-decoration: underline; text-underline-offset: 4px; }
   .kpi-link { display: none; }
   .dialog-list .panel-heading { padding: 12px 20px; }

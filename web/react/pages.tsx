@@ -92,9 +92,29 @@ export function DialogWorkspaceSummary({ evaluation }: { evaluation: Evaluation 
     </div>
   </aside>;
 }
-export function DialogView({ record, evaluation, checklist, checklists, appeals, demo, busy }: { record: DialogRecord; evaluation: Evaluation | null; checklist?: Checklist; checklists: Checklist[]; appeals: Appeal[]; demo: boolean; busy: boolean }) {
+export type DialogNeighbor = { id: string; title: string };
+export type DialogNeighbors = { position: number; total: number; prev: DialogNeighbor | null; next: DialogNeighbor | null };
+/** Previous / next conversation in the same order and filters as the list, so a reviewer can go through them without returning to it. */
+export function DialogPager({ neighbors }: { neighbors: DialogNeighbors }) {
+  const link = (item: DialogNeighbor | null, direction: 'prev' | 'next') => {
+    const text = t(direction === 'prev' ? 'Предыдущий' : 'Следующий');
+    const content = <>{direction === 'prev' && <Icon name="chevron"/>}<span className="pager-label">{text}</span>{direction === 'next' && <Icon name="chevron"/>}</>;
+    return item
+      ? <a className={`btn btn-small pager-${direction}`} href={`#dialog/${encodeURIComponent(item.id)}`} title={item.title} aria-label={`${text}: ${item.title}`} data-pager={direction}>{content}</a>
+      : <button type="button" className={`btn btn-small pager-${direction}`} disabled aria-label={text} data-pager={direction}>{content}</button>;
+  };
+  return <nav className="dialog-pager" aria-label={t('Соседние диалоги')}>
+    {link(neighbors.prev, 'prev')}
+    <span className="pager-position">{t('{position} из {total}', { position: neighbors.position, total: neighbors.total })}</span>
+    {link(neighbors.next, 'next')}
+  </nav>;
+}
+export function DialogView({ record, evaluation, checklist, checklists, appeals, demo, busy, neighbors = null }: { record: DialogRecord; evaluation: Evaluation | null; checklist?: Checklist; checklists: Checklist[]; appeals: Appeal[]; demo: boolean; busy: boolean; neighbors?: DialogNeighbors | null }) {
   return <><div className="dialog-workspace">
-    <a href="#dialogs" className="back-link"><Icon name="arrow-left"/> {t('Все диалоги')}</a>
+    <div className="dialog-nav-row">
+      <a href="#dialogs" className="back-link"><Icon name="arrow-left"/> {t('Все диалоги')}</a>
+      {neighbors && <DialogPager neighbors={neighbors}/>}
+    </div>
     <div className="detail-heading" data-reveal><div className="detail-identity"><div><h1>{dialogTitle(record, 'Карточка диалога')}</h1><div className="detail-meta"><span className="muted small mono">{record.conversation_id}</span><span className="badge">{channel(record.channel)}</span><span className="badge">{record.language}</span><StatusBadge record={{ ...record, evaluation_id: evaluation?.id, total: evaluation?.total }}/></div></div>{evaluation && <DialogWorkspaceSummary evaluation={evaluation}/>}</div><div className="detail-actions"><PrintButton/><input type="hidden" id="evaluation-checklist" value={checklists.find(item => item.id === evaluation?.checklist_id)?.id || checklists[0]?.id || ''}/><button className={`btn ${evaluation ? '' : 'btn-primary'}`} data-action="evaluate-dialog" disabled={busy || !checklists.length}>{t(evaluation ? 'Оценить заново' : 'Оценить диалог')} <Icon name="arrow-right"/></button></div></div>
     <TranscriptWorkspace key={record.conversation_id} record={record} evaluation={evaluation} checklist={checklist} appeals={appeals} demo={demo}/>
   </div><PrintReport record={record} evaluation={evaluation} checklist={checklist} appeals={appeals} demo={demo}/></>;
