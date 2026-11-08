@@ -58,13 +58,13 @@ export function ChecklistEditor({ checklist: cl, checklists, criterionIndex, dir
     <div className="editor-layout checklist-workbench">
       <aside className="panel checklist-navigation" data-reveal>
         <div className="panel-heading"><h2>{t('Критерии')}</h2><span className="badge">{cl.criteria.length}</span></div>
+        <div className="panel-body criteria-add"><button className="btn" data-action="add-criterion">＋ {t('Добавить критерий')}</button></div>
         <div className="editor-list">
           {cl.criteria.map((item, index) => <button key={item.id} className={`editor-item ${index === criterionIndex ? 'active' : ''}`} data-criterion-index={index} aria-current={index === criterionIndex ? 'true' : undefined}>
             <span className="editor-index">{String(index + 1).padStart(2, '0')}</span>
             <span><strong>{item.title}</strong><small>{item.gross_error ? t('Грубая ошибка') : t('Вес {weight} · {type}', { weight: number(item.weight), type: t(item.answer_type === 'scale' ? 'Шкала' : 'Да / Нет') })}</small></span>
           </button>)}
         </div>
-        <div className="panel-body"><button className="btn" data-action="add-criterion">＋ {t('Добавить критерий')}</button></div>
       </aside>
       <section className="panel checklist-configuration" data-reveal>
         <div className="panel-body">

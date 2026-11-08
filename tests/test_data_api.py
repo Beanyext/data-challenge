@@ -67,6 +67,29 @@ def test_fetch_bad_answers(monkeypatch, payload, message):
         fetch_group("DEV", BASE)
 
 
+@pytest.mark.parametrize(
+    "error",
+    [
+        "Группа не найдена: https://host.example.invalid/api/records?group_id=X&sig=SECRET123",
+        "Неверная подпись sig=SECRET123",
+        "authorization: Bearer SECRET123",
+        "ключ sk-ant-SECRET123456 отклонён",
+    ],
+)
+def test_server_error_text_hides_addresses_and_secrets(monkeypatch, error):
+    _serve(monkeypatch, {"isSuccess": False, "error": error})
+    with pytest.raises(DataApiError) as e:
+        fetch_group("DEV", BASE)
+    text = str(e.value)
+    assert "SECRET" not in text and "host.example.invalid" not in text and text.startswith("API вернуло ошибку: ")
+
+
+def test_server_error_without_text(monkeypatch):
+    _serve(monkeypatch, {"isSuccess": False, "error": None})
+    with pytest.raises(DataApiError, match="без описания"):
+        fetch_group("DEV", BASE)
+
+
 def test_network_error_does_not_leak_url(monkeypatch):
     _serve(monkeypatch, error=urllib.error.HTTPError(api_url("DEV", BASE), 403, "Forbidden", {}, None))
     with pytest.raises(DataApiError) as e:

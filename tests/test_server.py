@@ -262,6 +262,17 @@ def test_audio_offsets_skip_pause():
     assert audio_mod.turn_offsets(chat("t")["transcript"]) == {}
 
 
+def test_call_with_mixed_timezones_still_opens(client):
+    rec = call("c-mix")
+    ts = rec["transcript"][1]["timestamp"]
+    rec["transcript"][1]["timestamp"] = ts[:19]  # у одной реплики пояс потерян
+    assert audio_mod.turn_offsets(rec["transcript"]) == {}
+    upload(client, [rec])
+    assert client.get("/api/dialogs").status_code == 200
+    d = client.get("/api/dialogs/c-mix")
+    assert d.status_code == 200 and d.json()["transcript"][1]["display_time"] == ts[:19]
+
+
 def test_audio_endpoint(client, monkeypatch):
     upload(client, [call("c-1"), chat("t-1")])
     monkeypatch.setattr(audio_mod, "fresh_audio_url", lambda page: "https://files.example/rec.mp3?t=1")

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { JSDOM } from 'jsdom';
-import { AppealsView } from '../react/forms';
+import { AppealsView, ChecklistEditor } from '../react/forms';
 import type { Appeal } from '../react/types';
 import { setLocale } from '../react/i18n';
 
@@ -70,4 +70,17 @@ test('missing fragments are explained and completed decisions remain visible in 
   assert.equal(document.querySelector('[data-review]'), null, 'completed decisions cannot be reviewed again');
   assert.equal(document.querySelector('.appeal-actions [data-context]')!.getAttribute('data-context'), appeal.id);
   assert.equal(render([appeal]).querySelector('.appeal-card'), null, 'open filter excludes completed appeals');
+});
+
+test('add criterion button sits above the criteria list so a long checklist needs no scrolling', () => {
+  setLocale('ru');
+  const criteria = Array.from({ length: 12 }, (_, index) => ({ id: `c${index + 1}`, section_id: 's', title: `Критерий ${index + 1}`, description: 'Синтетическое правило', answer_type: 'binary' as const, weight: 5 }));
+  const checklist = { id: 'cl', version: 1, name: 'Синтетический чек-лист', sections: [{ id: 's', name: 'Раздел' }], criteria };
+  const document = new JSDOM(renderToStaticMarkup(<ChecklistEditor checklist={checklist} checklists={[checklist]} criterionIndex={0} dirty={false}/>)).window.document;
+  const navigation = document.querySelector('.checklist-navigation')!;
+  const button = navigation.querySelector('[data-action="add-criterion"]')!;
+  const list = navigation.querySelector('.editor-list')!;
+  assert.equal(navigation.querySelectorAll('[data-action="add-criterion"]').length, 1);
+  assert.ok(button.compareDocumentPosition(list) & 4, 'button comes before the list');
+  assert.equal(list.querySelectorAll('[data-criterion-index]').length, 12);
 });

@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -21,6 +22,20 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 class DataApiError(RuntimeError):
     """API не вернуло набор. Текст ошибки без адреса API."""
+
+
+_URL = re.compile(r"https?://\S+", re.I)
+_SECRET = re.compile(r"\b(sig|signature|token|key|api[_-]?key|password|authorization)\b\s*[=:]\s*(?:bearer\s+)?\S+", re.I)
+_TOKEN = re.compile(r"\b(?:bearer\s+\S+|sk-[A-Za-z0-9_-]{8,})", re.I)
+
+
+def _safe_error(err: object) -> str:
+    """Текст ошибки от сервера без адресов и подписей: он показывается в интерфейсе, в том числе на проекторе."""
+    if not isinstance(err, str) or not err.strip():
+        return "без описания"
+    text = _URL.sub("[адрес скрыт]", err)
+    text = _SECRET.sub(r"\1=[скрыто]", text)
+    return _TOKEN.sub("[скрыто]", text)[:300]
 
 
 def api_url(group_id: str, base: str | None = None) -> str:
@@ -57,7 +72,7 @@ def fetch_group(group_id: str, base: str | None = None, timeout: float = 60, att
         raise DataApiError(f"API организаторов не ответило: {last}")
     if not isinstance(doc, dict) or doc.get("isSuccess") is not True:
         err = doc.get("error") if isinstance(doc, dict) else "неизвестный формат"
-        raise DataApiError(f"API вернуло ошибку: {err}")
+        raise DataApiError(f"API вернуло ошибку: {_safe_error(err)}")
     records = (doc.get("data") or {}).get("records")
     if not isinstance(records, list):
         raise DataApiError("в ответе API нет data.records")
