@@ -52,6 +52,24 @@ def test_normalize_keeps_unknown_values_out():
     assert out["suggestion"]["na_rule"] == ""  # N/A запрещён — условие не предлагаем
 
 
+def test_placeholders_are_not_offered():
+    """Шаблон в квадратных скобках не попадает в предложение: остаётся текст пользователя."""
+    raw = {"verdict": "unclear", "summary": "s", "issues": [],
+           "suggestion": {"title": "[Название проверяемого действия оператора]",
+                          "description": "Да — оператор [конкретное действие] в течение [N минут].",
+                          "na_rule": "", "notes": "Без скобок."}}
+    user = cr.clean_criterion({"title": "не знаю", "description": "не знаю", "answer_type": "binary"})
+    out = cr.normalize(raw, user)
+    assert out["suggestion"]["title"] == "не знаю"
+    assert out["suggestion"]["description"] == "не знаю"
+    assert out["suggestion"]["notes"] == "Без скобок."
+
+
+def test_prompt_forbids_placeholders():
+    system, _ = cr.build_prompt(cr.clean_criterion(NEW), [])
+    assert "без квадратных скобок" in system and "[N минут]" not in system
+
+
 def test_empty_criterion_is_rejected():
     with pytest.raises(cr.ReviewError):
         cr.clean_criterion({"title": " ", "description": ""})
