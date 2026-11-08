@@ -21,6 +21,8 @@ export const pagesMessages: Record<string, { en: string; kk: string }> = {
   'Грубая ошибка': { en: 'Critical error', kk: 'Өрескел қате' },
   'Всего диалогов': { en: 'Total conversations', kk: 'Барлық диалогтар' },
   'С оценкой': { en: 'Evaluated', kk: 'Бағаланған' },
+  'Оценено': { en: 'Evaluated', kk: 'Бағаланды' },
+  'из {total}': { en: 'of {total}', kk: '/ {total}' },
   'Без оценки': { en: 'Not evaluated', kk: 'Бағаланбаған' },
   'Средний балл': { en: 'Average score', kk: 'Орташа ұпай' },
   'Грубые ошибки': { en: 'Critical errors', kk: 'Өрескел қателер' },
