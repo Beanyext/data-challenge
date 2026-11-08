@@ -42,7 +42,6 @@ async (originalPage) => {
     await page.locator('[data-review]').click();
     await page.locator('[name=reason]').waitFor();
     check(await page.locator('.appeal-evidence').evaluate(node => node.open), 'Review opens evidence');
-    await page.screenshot({ path: 'C:/Users/temer/AppData/Local/Temp/cqa-light-appeal.png' });
     await page.locator('[name=decision-status][value=changed]').check();
     await page.locator('select[name=answer]').selectOption('no');
     await page.locator('[name=reason]').fill('Вымышленное решение для проверки интерфейса.');
