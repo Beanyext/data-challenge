@@ -206,6 +206,35 @@ function validateChecklist(cl) {
   }
   return errors;
 }
+// Advice from the model about the current criterion. Nothing is saved until the user applies it and saves a version.
+async function reviewCriterion(button) {
+  const index=S.criterionIndex,c=S.editor?.criteria[index];
+  if(!c) return;
+  if(!c.title?.trim()&&!c.description?.trim()) {ui.criterionReviewMessage('Сначала напишите название и правило критерия.',true);return;}
+  const {_stepsText,...criterion}=c;
+  const others=S.editor.criteria.filter((_,i)=>i!==index).map(x=>({title:x.title,description:x.description}));
+  S.criterionReview=null;
+  busyButton(button,true);
+  ui.criterionReviewMessage('ИИ читает формулировку, обычно это 10–30 секунд…');
+  try {
+    const review=await api.reviewCriterion({criterion,checklist:{name:S.editor.name,criteria:others},locale:getLocale()});
+    if(S.criterionIndex!==index||S.editor.criteria[index]!==c) return;
+    S.criterionReview={criterion:c,review};
+    ui.criterionReview({review,criterion:c});
+  } catch(e) {
+    if(S.criterionIndex===index&&S.editor.criteria[index]===c) ui.criterionReviewMessage(errorText(e),true);
+  } finally {busyButton(button,false);}
+}
+function applyCriterionSuggestion() {
+  const c=S.editor?.criteria[S.criterionIndex],saved=S.criterionReview;
+  if(!c||!saved||saved.criterion!==c) return;
+  const s=saved.review.suggestion||{};
+  for(const field of ['title','description','notes']) if(typeof s[field]==='string'&&s[field].trim()) c[field]=s[field].trim();
+  if(c.na_allowed&&typeof s.na_rule==='string'&&s.na_rule.trim()) c.na_rule=s.na_rule.trim();
+  S.criterionReview=null;S.dirty=true;
+  renderEditor();
+  notify(t('Формулировка подставлена. Проверьте её и сохраните версию.'));
+}
 async function saveChecklist(button) {
   const errors=validateChecklist(S.editor);
   if(errors.length) {ui.editorErrors(errors);$('#editor-errors').scrollIntoView({block:'nearest'});return;}
@@ -314,6 +343,8 @@ document.addEventListener('click',async event=>{
       case 'evaluate-selected':showEvaluate([...S.selected]);break;
       case 'evaluate-dialog':showEvaluate([S.dialog.conversation_id],$('#evaluation-checklist').value);break;
       case 'save-checklist':await saveChecklist(el);break;
+      case 'review-criterion':await reviewCriterion(el);break;
+      case 'apply-criterion-suggestion':applyCriterionSuggestion();break;
       case 'new-checklist':if(S.dirty&&!confirm(t('Отменить несохранённые изменения чек-листа?')))break;S.editor=freshChecklist();S.dirty=true;S.criterionIndex=0;renderEditor();break;
       case 'add-criterion':{const ids=new Set(S.editor.criteria.map(c=>c.id));let i=S.editor.criteria.length+1;while(ids.has(`c${String(i).padStart(2,'0')}`))i++;S.editor.criteria.push({id:`c${String(i).padStart(2,'0')}`,section_id:S.editor.sections[0]?.id||'s1',title:t('Новый критерий'),description:'',answer_type:'binary',scale:null,weight:10,na_allowed:false,na_rule:null,notes:null,gross_error:false});S.criterionIndex=S.editor.criteria.length-1;S.dirty=true;renderEditor();break;}
       case 'remove-criterion':if(!confirm(t('Удалить критерий из этой версии? Сохранённые оценки останутся прежними.')))break;S.editor.criteria.splice(S.criterionIndex,1);S.criterionIndex=Math.max(0,S.criterionIndex-1);S.dirty=true;renderEditor();break;

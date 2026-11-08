@@ -2,7 +2,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import type { ComponentProps, ReactNode } from 'react';
 import { DialogsView, DialogRows, DialogView, ErrorView, LoadingView, ModalContents, DialogKpis, ScoreHeader, EstimateNote, type ModalProps, type ListStats } from './pages';
-import { ChecklistEditor, AppealsView, ReviewForm, ScalePreview, SavedBanner } from './forms';
+import { ChecklistEditor, AppealsView, ReviewForm, ScalePreview, SavedBanner, CriterionReview } from './forms';
 import { Icon, EmptyState } from './shared';
 import { clearSlots, setSlot } from './slots';
 import { MotionFrame, installInteractionMotion, animateElement } from './motion';
@@ -68,6 +68,8 @@ export const ui = {
       : <EmptyState title={t('Добавьте первый диалог')} text={t('Импортируйте набор по group_id или загрузите транскрипт в JSON.')} actions={<button className="btn btn-primary" data-action="import">{t('Импорт по группе')}</button>}/>);
   },
   scale: (scale?: Scale | null) => slot('scale-preview', <ScalePreview scale={scale}/>),
+  criterionReview: (props: ComponentProps<typeof CriterionReview>) => slot('criterion-review', <CriterionReview {...props}/>),
+  criterionReviewMessage: (message: string, error = false) => slot('criterion-review', <p className={error ? 'danger small' : 'muted small'} role="status">{localizeMessage(message)}</p>),
   estimate: (health: Health | null, count: number) => slot('evaluate-estimate', <EstimateNote health={health} count={count}/>),
   savedNotice: (notice: SavedNotice | null) => slot('checklist-saved', <SavedBanner notice={notice}/>),
   editorErrors: (errors: string[]) => slot('editor-errors', <div className="notice error rule">{errors.map((error, index) => <div key={index}>{error}</div>)}</div>),

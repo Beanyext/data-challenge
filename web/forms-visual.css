@@ -155,3 +155,23 @@
     .appeal-review-actions > .btn { flex: 1 1 auto; }
   }
 }
+
+@layer forms {
+  .criterion-review-box { display: grid; gap: 10px; padding: 12px 14px; border: 1px dashed var(--line); border-radius: var(--radius, 8px); background: var(--surface); }
+  .criterion-review-action { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+  .criterion-review-action .editor-help { margin: 0; flex: 1 1 260px; }
+  .criterion-review { display: grid; gap: 8px; padding: 12px 14px; border-radius: var(--radius, 8px); border: 1px solid var(--line); border-left-width: 4px; background: var(--surface); }
+  .criterion-review p { margin: 0; }
+  .criterion-review-good { border-left-color: var(--green); }
+  .criterion-review-improve { border-left-color: var(--amber); }
+  .criterion-review-unclear { border-left-color: var(--red); }
+  .criterion-review-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; align-items: baseline; }
+  .criterion-review-source { font-size: 12px; color: var(--muted); }
+  .criterion-review-issues { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; }
+  .criterion-review-fix { color: var(--muted); }
+  .criterion-review-suggestion { display: grid; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+  .criterion-review-suggestion h4 { margin: 0; font-size: 13px; }
+  .criterion-review-field small { display: block; color: var(--muted); font-size: 12px; }
+  .criterion-review-field p { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
+  .criterion-review-suggestion .btn { justify-self: start; }
+}

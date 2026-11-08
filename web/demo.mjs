@@ -363,6 +363,28 @@ function tone() {
 }
 
 /** Explicit fixture mode only; data is invented, persisted locally, never sent to an LLM. */
+const VAGUE = ['качественно', 'грамотно', 'хорошо', 'правильно', 'вовремя', 'быстро', 'адекватно', 'корректно', 'своевременно'];
+
+/** Training mode has no model: a few plain rules show how the advice panel works. */
+export function ruleReview({ criterion, checklist } = {}) {
+  const c = criterion || {};
+  const title = String(c.title || '').trim(), description = String(c.description || '').trim();
+  if (!title && !description) demoError('Сначала напишите название и правило критерия.');
+  const issues = [];
+  if (description.length < 40) issues.push({ field: 'description', problem: 'Правило слишком короткое: непонятно, что именно должен сделать оператор.', fix: 'Опишите действие оператора и признак, по которому видно, что оно выполнено.' });
+  const words = VAGUE.filter(w => new RegExp(`(^|[^а-яё])${w}([^а-яё]|$)`, 'i').test(description));
+  if (words.length) issues.push({ field: 'description', problem: `Расплывчатое слово без признака: ${words.join(', ')}.`, fix: 'Замените на наблюдаемый признак или порог.' });
+  if (c.na_allowed && !String(c.na_rule || '').trim()) issues.push({ field: 'na_rule', problem: 'N/A разрешён, но не сказано, когда критерий неприменим.', fix: 'Опишите ситуацию, в которой критерий не оценивается.' });
+  if ((checklist?.criteria || []).some(o => String(o.title || '').trim().toLowerCase() === title.toLowerCase())) issues.push({ field: 'overlap', problem: 'Критерий с таким названием уже есть в чек-листе.', fix: 'Переименуйте или объедините критерии.' });
+  return {
+    verdict: !issues.length ? 'good' : description ? 'improve' : 'unclear',
+    summary: 'Учебный режим без модели: проверка по простым правилам.',
+    issues,
+    suggestion: { title, description, na_rule: c.na_allowed ? String(c.na_rule || '') : '', notes: String(c.notes || '') },
+    model: 'demo', cost_usd: 0, seconds: 0,
+  };
+}
+
 export function createDemoApi({ storage } = {}) {
   if (!storage) {
     try { storage = globalThis.localStorage; } catch { /* Private browsing can disable localStorage. */ }
@@ -402,6 +424,7 @@ export function createDemoApi({ storage } = {}) {
   const accept = async fn => copy(await fn());
   const service = {
     demo: true,
+    reviewCriterion: payload => accept(() => ruleReview(payload)),
     listDialogs: () => accept(() => state.dialogs.map(row)),
     getDialog: id => accept(() => row(find('dialogs', id))),
     listChecklists: () => accept(() => [...new Set(state.checklists.map(c => c.id))].map(latest)),
