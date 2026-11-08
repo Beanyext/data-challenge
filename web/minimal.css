@@ -28,6 +28,7 @@
   .app-shell { margin-left: 204px; }
   .topbar { height: 52px; min-height: 52px; padding: 0 28px; background: #fff; }
   .topbar::before { display: none; }
+  .topbar-start { display: flex; align-items: center; gap: 16px; min-width: 0; }
   .topbar-parent, .breadcrumb-sep { display: none; }
   .demo-banner { padding: 8px 28px; font-size: 12px; background: #f0f5f2; color: #466052; }
   main { padding: 22px 28px 40px; }
@@ -120,6 +121,7 @@
   .kpi-bar .kpi-label { font-size: 12px; color: #53675c; }
   .kpi-bar .kpi-value { font-size: 17px; color: #20382e; }
   .kpi-bar .kpi-danger .kpi-value { color: #a03429; }
+  .kpi-bar .kpi-unit { font-size: 13px; font-weight: 500; color: #53675c; }
   .kpi-bar .kpi-action:hover .kpi-label, .kpi-bar .kpi-action[aria-pressed=true] .kpi-label { color: #096246; text-decoration: underline; text-underline-offset: 4px; }
   .kpi-link { display: none; }
   .dialog-list .panel-heading { padding: 12px 20px; }

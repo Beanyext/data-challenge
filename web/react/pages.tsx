@@ -43,15 +43,14 @@ export function DialogRows({ rows, selected }: { rows: DialogRecord[]; selected:
   </tr>)}</>;
 }
 export interface ListStats { total: number; completed: number; average: number | null; gross: number }
-/** One-line summary. Two figures double as filters: evaluated conversations and gross errors. */
+/** One-line summary, most business-critical first. Two figures double as filters: gross errors and evaluated conversations. */
 export function DialogKpis({ stats, status }: { stats: ListStats; status: string }) {
   return <section className="kpi-bar" aria-label={t('Сводка по диалогам')}>
-    <div className="kpi"><span className="kpi-label">{t('Всего диалогов')}</span><strong className="kpi-value">{number(stats.total)}</strong></div>
-    <button type="button" className="kpi kpi-action" data-action="status-filter" data-status="completed" aria-pressed={status === 'completed'} title={t('Показать только диалоги с оценкой')}>
-      <span className="kpi-label">{t('С оценкой')}</span><strong className="kpi-value">{number(stats.completed)}</strong></button>
-    <div className="kpi"><span className="kpi-label">{t('Средний балл')}</span><strong className="kpi-value">{number(stats.average)}</strong></div>
     <button type="button" className={`kpi kpi-action ${stats.gross ? 'kpi-danger' : ''}`} data-action="status-filter" data-status="gross" aria-pressed={status === 'gross'} title={t('Показать только диалоги с грубой ошибкой')}>
       <span className="kpi-label">{t('Грубые ошибки')} <span className="kpi-link">· {t(status === 'gross' ? 'Показаны' : 'Показать')}</span></span><strong className="kpi-value">{number(stats.gross)}</strong></button>
+    <div className="kpi"><span className="kpi-label">{t('Средний балл')}</span><strong className="kpi-value">{number(stats.average)}{typeof stats.average === 'number' && <span className="kpi-unit"> / 100</span>}</strong></div>
+    <button type="button" className="kpi kpi-action" data-action="status-filter" data-status="completed" aria-pressed={status === 'completed'} title={t('Показать только диалоги с оценкой')}>
+      <span className="kpi-label">{t('Оценено')}</span><strong className="kpi-value">{number(stats.completed)} <span className="kpi-unit">{t('из {total}', { total: number(stats.total) })}</span></strong></button>
   </section>;
 }
 export function ScoreHeader({ sort }: { sort: ScoreSort }) {
