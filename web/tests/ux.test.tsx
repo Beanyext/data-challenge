@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { JSDOM } from 'jsdom';
 import { EvaluationView } from '../react/result';
-import { DialogRows, DialogWorkspaceSummary, EstimateNote } from '../react/pages';
+import { DialogPager, DialogRows, DialogWorkspaceSummary, EstimateNote } from '../react/pages';
 import { PrintReport } from '../react/print-report';
 import { dialogTitle } from '../react/shared';
 import { setLocale, translate as t, translatePlural } from '../react/i18n';
@@ -163,4 +163,17 @@ test('print report keeps turn numbers as plain text and uses time from the start
   assert.equal(report.querySelector('.print-turn h4')!.textContent, '1 · Клиент · 00:00');
   assert.equal(report.querySelector('.print-report-subject')!.textContent, 'Звонок · RU · 00:25');
   assert.match(report.querySelector('.print-critical')!.textContent!, /Оператор предложил перевод денег лично, реплика № 6/);
+});
+
+test('dialog pager links to neighbours in list order and disables the missing side', () => {
+  const first = dom(renderToStaticMarkup(<DialogPager neighbors={{ position: 1, total: 6, prev: null, next: { id: 'demo kz/1', title: 'Тариф пен комиссия' } }}/>));
+  const prev = first.querySelector<HTMLButtonElement>('[data-pager="prev"]')!;
+  assert.equal(prev.tagName, 'BUTTON');
+  assert.ok(prev.disabled, 'no previous conversation on the first row');
+  const next = first.querySelector('[data-pager="next"]')!;
+  assert.equal(next.getAttribute('href'), '#dialog/demo%20kz%2F1', 'id is encoded like the list link');
+  assert.equal(next.getAttribute('title'), 'Тариф пен комиссия');
+  assert.equal(first.querySelector('.pager-position')!.textContent, '1 из 6');
+  const middle = dom(renderToStaticMarkup(<DialogPager neighbors={{ position: 2, total: 6, prev: { id: 'a', title: 'A' }, next: { id: 'b', title: 'B' } }}/>));
+  assert.deepEqual([...middle.querySelectorAll('a[data-pager]')].map(a => a.getAttribute('href')), ['#dialog/a', '#dialog/b']);
 });

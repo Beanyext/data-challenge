@@ -128,8 +128,17 @@ function renderRows() {
   $('#selection-toolbar').hidden = !S.selected.size;
   $('#evaluate-selected').textContent = S.selected.size ? t('Оценить выбранные ({count}) ↗',{count:S.selected.size}) : t('Оценить выбранные ↗');
 }
+// Neighbours follow the list as the reviewer left it (filters and sort); if the open conversation is filtered out, the full list is used.
+function dialogNeighbors() {
+  const id = S.dialog?.conversation_id;
+  let list = visibleRows(), index = list.findIndex(r => r.conversation_id === id);
+  if (index < 0) { list = S.rows; index = list.findIndex(r => r.conversation_id === id); }
+  if (index < 0 || list.length < 2) return null;
+  const pick = r => r ? {id:r.conversation_id,title:nameForRow(r)} : null;
+  return {position:index+1,total:list.length,prev:pick(list[index-1]),next:pick(list[index+1])};
+}
 function renderDialog() {
-  ui.dialog({record:S.dialog,evaluation:S.evaluation,checklist:checklistForEvaluation(),checklists:S.checklists,appeals:S.appeals,demo:S.demo,busy:S.busy});
+  ui.dialog({record:S.dialog,evaluation:S.evaluation,checklist:checklistForEvaluation(),checklists:S.checklists,appeals:S.appeals,demo:S.demo,busy:S.busy,neighbors:dialogNeighbors()});
 }
 async function highlightTurn(turn, end, source) {
   const first=Number(turn), last=end===undefined?first:Number(end);
