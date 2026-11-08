@@ -1,5 +1,5 @@
 import { Fragment, type ReactNode } from 'react';
-import type { Appeal, Checklist, Criterion, CriterionResult, Scale, SavedNotice } from './types';
+import type { Appeal, Checklist, Criterion, CriterionResult, CriterionReviewResult, Scale, SavedNotice } from './types';
 import { EmptyState, Icon, TurnText, label, number } from './shared';
 import { Slot } from './slots';
 import { translate as t, translatePlural } from './i18n';
@@ -80,6 +80,13 @@ export function ChecklistEditor({ checklist: cl, checklists, criterionIndex, dir
                 <div className="field-grid">
                   <label className="full">{t('Название критерия')}<input data-criterion="title" defaultValue={c.title} required maxLength={200} /></label>
                   <label className="full">{t('Что считается выполнением')}<textarea data-criterion="description" required defaultValue={c.description} /><span className="editor-help">{t('Опишите действие оператора и условия, при которых критерий выполнен.')}</span></label>
+                  <div className="full criterion-review-box">
+                    <div className="criterion-review-action">
+                      <button type="button" className="btn btn-small" data-action="review-criterion">{t('Проверить формулировку с ИИ')}</button>
+                      <span className="editor-help">{t('ИИ подскажет, понятно ли написан критерий. Чек-лист не изменится, пока вы не подставите предложение.')}</span>
+                    </div>
+                    <div id="criterion-review" aria-live="polite"><Slot name="criterion-review" /></div>
+                  </div>
                 </div>
               </fieldset>
               <fieldset className="editor-fieldset">
@@ -115,6 +122,44 @@ export function ChecklistEditor({ checklist: cl, checklists, criterionIndex, dir
       </section>
     </div>
   </>;
+}
+
+const REVIEW_VERDICTS: Record<CriterionReviewResult['verdict'], string> = {
+  good: 'Сформулирован понятно',
+  improve: 'Можно уточнить',
+  unclear: 'Сложно оценить однозначно',
+};
+const REVIEW_FIELDS: Record<string, string> = {
+  title: 'Название критерия',
+  description: 'Что считается выполнением',
+  answer: 'Тип ответа',
+  na_rule: 'Когда критерий неприменим',
+  notes: 'Пояснения для оценки',
+  weight: 'Вес критерия',
+  overlap: 'Пересечение с другими критериями',
+};
+const SUGGESTED: Array<keyof CriterionReviewResult['suggestion']> = ['title', 'description', 'na_rule', 'notes'];
+
+/** Advice from the model about one criterion. The checklist changes only after "Apply suggestion". */
+export function CriterionReview({ review, criterion }: { review: CriterionReviewResult; criterion: Criterion }) {
+  const verdict = REVIEW_VERDICTS[review.verdict] ? review.verdict : 'improve';
+  const current = (field: string) => String((criterion as unknown as Record<string, unknown>)[field] ?? '').trim();
+  const changed = SUGGESTED.filter(field => (review.suggestion?.[field] || '').trim() && review.suggestion[field].trim() !== current(field));
+  const source = review.model === 'mock' || review.model === 'demo'
+    ? t('Учебный режим: простые правила, без ИИ')
+    : [review.model, review.cost_usd != null ? `$${review.cost_usd.toFixed(3)}` : '', review.seconds != null ? `${Math.round(review.seconds)} s` : ''].filter(Boolean).join(' · ');
+  return <div className={`criterion-review criterion-review-${verdict}`} role="status">
+    <div className="criterion-review-head"><strong>{t(REVIEW_VERDICTS[verdict])}</strong>{source && <span className="criterion-review-source">{source}</span>}</div>
+    {review.summary && <p>{review.summary}</p>}
+    {review.issues?.length > 0 && <ul className="criterion-review-issues">
+      {review.issues.map((issue, index) => <li key={index}><strong>{t(REVIEW_FIELDS[issue.field] || 'Что считается выполнением')}.</strong> {issue.problem}{issue.fix && <span className="criterion-review-fix"> {issue.fix}</span>}</li>)}
+    </ul>}
+    {changed.length > 0 && <div className="criterion-review-suggestion">
+      <h4>{t('Предложенная формулировка')}</h4>
+      {changed.map(field => <div key={field} className="criterion-review-field"><small>{t(REVIEW_FIELDS[field])}</small><p>{review.suggestion[field]}</p></div>)}
+      <button type="button" className="btn btn-primary btn-small" data-action="apply-criterion-suggestion">{t('Подставить предложение')}</button>
+    </div>}
+  </div>;
 }
 
 export function ScalePreview({ scale }: { scale?: Scale | null }) {

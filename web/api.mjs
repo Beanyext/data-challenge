@@ -41,9 +41,9 @@ export function createApi({ baseUrl = '/api', demo = false, timeout = 20000 } = 
     throw new ApiError('Укажите путь /api или адрес сервера HTTP(S).');
   }
 
-  async function request(path, { method = 'GET', body, multipart = false } = {}) {
+  async function request(path, { method = 'GET', body, multipart = false, wait = timeout } = {}) {
     const abort = new AbortController();
-    const timer = setTimeout(() => abort.abort(), timeout);
+    const timer = setTimeout(() => abort.abort(), wait);
     try {
       const response = await fetch(`${base}${path}`, {
         method,
@@ -76,6 +76,8 @@ export function createApi({ baseUrl = '/api', demo = false, timeout = 20000 } = 
     getDialog: value => request(`/dialogs/${id(value)}`),
     listChecklists: async () => arrayResult(await request('/checklists'), 'checklists'),
     saveChecklist: checklist => request('/checklists', { method: 'POST', body: checklist }),
+    // The model reads the wording before answering, so this call may take longer than ordinary requests.
+    reviewCriterion: payload => request('/checklists/review-criterion', { method: 'POST', body: payload, wait: Math.max(timeout, 120000) }),
     importDialogs: groupId => request('/dialogs/import', { method: 'POST', body: { group_id: groupId } }),
     uploadDialog: file => {
       const body = new FormData(); body.append('file', file);

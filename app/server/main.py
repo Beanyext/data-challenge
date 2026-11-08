@@ -35,6 +35,7 @@ from app.evaluator.providers import AnthropicProvider, EvaluationError, MockProv
 from app.scoring import ScoringError
 from app.server import audio as audio_mod
 from app.server.checklist_rules import ChecklistError, validate_checklist
+from app.server.criterion_review import LOCALES, ReviewError, review_criterion, review_effort, rule_review
 from app.server.store import Store, new_id
 from app.server.views import allowed_answer, appeal_view, criterion_by_id, dialog_row, evaluation_view, public_dialog
 
@@ -282,6 +283,25 @@ def create_app(db_path: str | Path | None = None, provider: str | None = None, w
     @app.get("/api/checklists/{cl_id}/versions")
     def checklist_versions(cl_id: str):
         return store.checklist_versions(cl_id) or _fail(404, "Чек-лист не найден.")
+
+    @app.post("/api/checklists/review-criterion")
+    def review_criterion_route(payload: dict = Body(...)):
+        """Совет модели по формулировке критерия. Ничего не сохраняет."""
+        locale = payload.get("locale") if payload.get("locale") in LOCALES else "ru"
+        try:
+            if provider_name == "mock":
+                return rule_review(payload.get("criterion"), payload.get("checklist"), locale)
+            try:
+                provider = AnthropicProvider(effort=review_effort(), max_tokens=8000)
+            except EvaluationError as e:
+                _fail(503, f"Модель недоступна: {e}")
+            return review_criterion(payload.get("criterion"), payload.get("checklist"), provider, locale)
+        except ReviewError as e:
+            _fail(400, str(e))
+        except HTTPException:
+            raise
+        except Exception as e:  # сеть, лимиты, отказ модели: совет не обязателен, редактор работает дальше
+            _fail(502, f"Совет модели не получен: {type(e).__name__}. Повторите или сохраните критерий без совета.")
 
     @app.post("/api/checklists")
     def save_checklist(payload: dict = Body(...)):
