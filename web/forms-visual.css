@@ -26,6 +26,7 @@
   .checklist-navigation .panel-heading h2 { font-size: 15px; }
   .checklist-navigation .panel-body { padding: 4px 16px 18px; }
   .checklist-navigation .panel-body > .btn { width: 100%; }
+  .checklist-navigation .panel-body.criteria-add { padding: 0 16px 8px; }
   .checklist-navigation .editor-item { align-items: flex-start; border: 1px solid transparent; }
   .checklist-navigation .editor-item > span:last-child { min-width: 0; }
   .checklist-navigation .editor-item strong { line-height: 1.5; overflow-wrap: anywhere; }
@@ -130,6 +131,7 @@
     .checklist-workbench .editor-item { flex-shrink: 0; width: 200px; min-width: 200px; }
     .checklist-navigation .panel-heading { padding: 16px 18px; }
     .checklist-navigation .panel-body { padding: 6px 18px 18px; }
+    .checklist-navigation .panel-body.criteria-add { padding: 0 18px 8px; }
     .checklist-configuration > .panel-body { padding: 20px 16px; }
     .checklist-name { padding-bottom: 20px; margin-bottom: 20px; }
     .checklist-configuration .editor-title-row { align-items: flex-start; flex-direction: column; gap: 12px; margin-bottom: 24px; }

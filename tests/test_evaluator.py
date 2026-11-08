@@ -135,6 +135,13 @@ def test_call_times_become_relative():
     assert display_times([{"timestamp": "00:02"}]) == ["00:02"]
 
 
+def test_mixed_timezones_do_not_break_the_prompt():
+    call = [{"timestamp": "2026-11-03T13:10:00+00:00", "speaker": "client", "text": "Алло"},
+            {"timestamp": "2026-11-03T13:10:05", "speaker": "operator", "text": "Здравствуйте"}]
+    assert display_times(call) == ["2026-11-03T13:10:00+00:00", "2026-11-03T13:10:05"]
+    assert render_transcript({"transcript": call}).splitlines()[1].startswith("[1] 2026-11-03T13:10:05 оператор:")
+
+
 def test_quote_matching_is_tolerant_but_exact_about_words():
     turn = "Здравствуйте, меня зовут Ирина. Тариф указан в разделе «Кабинет»."
     assert quote_found("МЕНЯ  зовут ирина", turn)
