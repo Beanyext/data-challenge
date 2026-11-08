@@ -149,8 +149,8 @@ class Store:
         costs, seconds = [], []
         for r in rows:
             res = json.loads(r["result_json"] or "{}")
-            if res.get("provider") == "mock":
-                continue
+            if res.get("provider") == "mock" or res.get("reused_from"):
+                continue  # частичная переоценка дешевле полной и исказила бы прогноз цены
             if isinstance(res.get("cost_usd"), (int, float)):
                 costs.append(float(res["cost_usd"]))
             s = sum(float(c.get("seconds") or 0) for c in res.get("calls") or [])

@@ -32,6 +32,7 @@ from app import data_api
 from app.evaluator.cli import load_env
 from app.evaluator.evaluate import evaluate_dialog
 from app.evaluator.providers import AnthropicProvider, EvaluationError, MockProvider
+from app.evaluator.reuse import evaluate_with_reuse
 from app.scoring import ScoringError
 from app.server import audio as audio_mod
 from app.server.checklist_rules import ChecklistError, validate_checklist
@@ -102,18 +103,35 @@ class Runner:
         except EvaluationError as e:
             _fail(503, f"Модель недоступна: {e}")
 
-    def start(self, records: list[dict], checklist: dict) -> dict:
+    def start(self, records: list[dict], checklist: dict, reuse: bool = False) -> dict:
         job_id = new_id("job")
         items = [(new_id("ev"), r["conversation_id"]) for r in records]
+        # Прошлые оценки ищем до создания новых: иначе последней окажется только что созданная пустая.
+        previous = {r["conversation_id"]: self._previous(r["conversation_id"], checklist) if reuse else None for r in records}
         self.store.create_job(job_id, checklist, items)
-        for (ev_id, _), record in zip(items, records):
-            self.pool.submit(self._one, job_id, ev_id, record, checklist)
+        for (ev_id, cid), record in zip(items, records):
+            self.pool.submit(self._one, job_id, ev_id, record, checklist, previous.get(cid))
         return self.store.get_job(job_id)
 
-    def _one(self, job_id: str, ev_id: str, record: dict, checklist: dict) -> None:
+    def _previous(self, cid: str, checklist: dict) -> tuple[dict, dict] | None:
+        """Последняя готовая оценка этого диалога по более ранней версии того же чек-листа."""
+        for ev in self.store.evaluations_for(cid):
+            if ev["status"] != "done" or not ev["result"] or ev["checklist_id"] != checklist.get("id"):
+                continue
+            if not isinstance(ev["checklist_version"], int) or ev["checklist_version"] >= checklist.get("version", 0):
+                continue
+            old = self.store.get_checklist(ev["checklist_id"], ev["checklist_version"])
+            return (ev, old) if old else None
+        return None
+
+    def _one(self, job_id: str, ev_id: str, record: dict, checklist: dict, previous: tuple[dict, dict] | None = None) -> None:
         self.store.job_running(job_id)
         try:
-            result = evaluate_dialog(record, checklist, self.provider())
+            if previous:
+                ev, old = previous
+                result = evaluate_with_reuse(record, checklist, self.provider(), ev["result"], old, ev["id"])
+            else:
+                result = evaluate_dialog(record, checklist, self.provider())
         except Exception as exc:  # одна ошибка не останавливает задание
             result = {"conversation_id": record.get("conversation_id"), "error": f"{type(exc).__name__}: {exc}"}
         self.store.finish_evaluation(ev_id, job_id, result)
@@ -157,7 +175,12 @@ def create_app(db_path: str | Path | None = None, provider: str | None = None, w
             need = "multipart/form-data" if request.url.path.endswith("/upload") else "application/json"
             if not ctype.startswith(need):
                 return JSONResponse({"detail": f"Нужен Content-Type {need}."}, status_code=415)
-        return await call_next(request)
+        response = await call_next(request)
+        if not request.url.path.startswith("/api/"):
+            # Файлы интерфейса браузер перепроверяет при каждой загрузке: после обновления кода
+            # не останется старого api.mjs в кеше рядом с новым app.mjs.
+            response.headers["Cache-Control"] = "no-cache"
+        return response
 
     # --- служебное -----------------------------------------------------------
 
@@ -335,7 +358,8 @@ def create_app(db_path: str | Path | None = None, provider: str | None = None, w
             _fail(404, f"Нет таких диалогов: {', '.join(missing[:5])}")
         runner.check_ready()
         records = [store.get_dialog(i)["record"] for i in ids]
-        return runner.start(records, checklist)
+        # reuse: переоценка после смены версии, модель проверяет только новые и изменённые критерии
+        return runner.start(records, checklist, reuse=payload.get("reuse") is True)
 
     @app.get("/api/jobs/{job_id}")
     def get_job(job_id: str):

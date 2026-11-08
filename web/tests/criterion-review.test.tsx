@@ -48,3 +48,12 @@ test('training mode rules catch vague words and a missing N/A rule', () => {
   assert.deepEqual(out.issues.map(i => i.field).sort(), ['description', 'description', 'na_rule']);
   assert.throws(() => ruleReview({ criterion: { title: ' ', description: '' } }));
 });
+
+test('re-evaluation after a new version explains that only changed criteria go to the model', async () => {
+  const { ModalContents } = await import('../react/pages');
+  setLocale('ru');
+  const base = { kind: 'evaluate' as const, count: 65, checklists: [checklist], demo: false };
+  assert.match(renderToStaticMarkup(<ModalContents data={{ ...base, reuse: true }} />), /data-reuse-note/);
+  assert.doesNotMatch(renderToStaticMarkup(<ModalContents data={base} />), /data-reuse-note/);
+  assert.doesNotMatch(renderToStaticMarkup(<ModalContents data={{ ...base, reuse: true, demo: true }} />), /data-reuse-note/);
+});

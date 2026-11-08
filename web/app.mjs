@@ -273,13 +273,14 @@ function showSettings() {
 function showImport() {
   openModal('Импорт набора',{kind:'import',demo:S.demo},'import-form');
 }
-function showEvaluate(ids, selectedChecklist) {
+function showEvaluate(ids, selectedChecklist, reuse = false) {
   if(S.busy) return notify('Предыдущее задание ещё выполняется. Дождитесь результата.');
   if(!ids.length) return notify('Сначала выберите диалог.',true);
   if(!S.checklists.length) return notify('Сначала создайте чек-лист.',true);
-  openModal('Запустить оценку',{kind:'evaluate',count:ids.length,selectedChecklist,checklists:S.checklists,demo:S.demo},'evaluate-form');
-  $('#evaluate-form')._ids=ids;
-  loadEstimate(ids.length);
+  openModal('Запустить оценку',{kind:'evaluate',count:ids.length,selectedChecklist,checklists:S.checklists,demo:S.demo,reuse},'evaluate-form');
+  $('#evaluate-form')._ids=ids;$('#evaluate-form')._reuse=reuse;
+  // Partial re-evaluation costs less than a full one, so the full-price forecast would mislead.
+  if(!reuse) loadEstimate(ids.length);
 }
 // Price and time come from the server's recent real evaluations. Without them the general confirmation text stays.
 async function loadEstimate(count) {
@@ -337,7 +338,7 @@ document.addEventListener('click',async event=>{
       case 'status-filter':{const value=S.filters.status===el.dataset.status?'':el.dataset.status;S.filters.status=value;const control=document.querySelector('[data-filter="status"]');if(control)control.value=value;renderRows();break;}
       case 'sort-score':S.sort=S.sort===null?'asc':S.sort==='asc'?'desc':null;renderRows();break;
       case 'dismiss-saved':S.savedNotice=null;ui.savedNotice(null);break;
-      case 'reevaluate-saved':if(S.savedNotice)showEvaluate(staleRows(S.savedNotice),S.savedNotice.checklistId);break;
+      case 'reevaluate-saved':if(S.savedNotice)showEvaluate(staleRows(S.savedNotice),S.savedNotice.checklistId,true);break;
       case 'reset-filters':S.filters={query:'',channel:'',language:'',status:''};renderDialogs();$('#search-dialogs')?.focus();break;
       case 'clear-selection':S.selected.clear();renderRows();$('#select-all')?.focus();break;
       case 'evaluate-selected':showEvaluate([...S.selected]);break;
@@ -389,7 +390,7 @@ document.addEventListener('submit',async event=>{
     }else if(form.id==='evaluate-form'){
       if(S.busy)throw new Error('Предыдущее задание ещё выполняется.');
       S.busy=true;
-      try{const job=await api.evaluate(form._ids,String(values.get('checklistId')));if(!job.id)throw new Error('Сервер не вернул номер задания.');modal.close();document.querySelectorAll('[data-action="evaluate-dialog"],[data-action="evaluate-selected"]').forEach(b=>{b.disabled=true;});pollJob(job.id);}catch(e){S.busy=false;throw e;}
+      try{const job=await api.evaluate(form._ids,String(values.get('checklistId')),form._reuse===true);if(!job.id)throw new Error('Сервер не вернул номер задания.');modal.close();document.querySelectorAll('[data-action="evaluate-dialog"],[data-action="evaluate-selected"]').forEach(b=>{b.disabled=true;});pollJob(job.id);}catch(e){S.busy=false;throw e;}
     }else if(form.dataset.decision){
       const select=$('select[name=answer]',form),raw=select.value,answer=['yes','no','na'].includes(raw)?raw:Number(raw),reason=String(values.get('reason')).trim();if(!reason)throw new Error('Укажите причину решения.');
       await api.decideAppeal(form.dataset.decision,{answer,reason,status:values.get('decision-status')});await loadRoute();notify('Решение сохранено. Итог пересчитан.');

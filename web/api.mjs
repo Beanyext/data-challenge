@@ -83,7 +83,8 @@ export function createApi({ baseUrl = '/api', demo = false, timeout = 20000 } = 
       const body = new FormData(); body.append('file', file);
       return request('/dialogs/upload', { method: 'POST', body, multipart: true });
     },
-    evaluate: (conversationIds, checklistId) => request('/evaluations', { method: 'POST', body: { conversation_ids: conversationIds, checklist_id: checklistId } }),
+    // reuse: after a new checklist version the server asks the model only about new and changed criteria.
+    evaluate: (conversationIds, checklistId, reuse = false) => request('/evaluations', { method: 'POST', body: { conversation_ids: conversationIds, checklist_id: checklistId, ...(reuse ? { reuse: true } : {}) } }),
     getJob: value => request(`/jobs/${id(value)}`),
     getEvaluation: value => request(`/evaluations/${id(value)}`),
     listAppeals: async () => arrayResult(await request('/appeals'), 'appeals'),
