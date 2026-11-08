@@ -110,7 +110,8 @@ function renderDialogs() {
 }
 function visibleRows() {
   const f = S.filters;
-  const rows = S.rows.filter(r => (!f.language || r.language === f.language) && (!f.channel || r.channel === f.channel) && (!f.query || `${r.conversation_id} ${nameForRow(r)} ${(r.transcript || []).map(t => t.text).join(' ')}`.toLocaleLowerCase().includes(f.query.toLocaleLowerCase())) && (!f.status || (f.status === 'gross' ? r.gross_error : f.status === 'completed' ? typeof r.total === 'number' : !r.evaluation_id)));
+  const statusMatches = r => !f.status || ({ gross:!!r.gross_error, completed:typeof r.total === 'number', pending:!r.evaluation_id, review:!!r.needs_review, appeal:(r.open_appeals ?? 0)>0, failed:r.status==='error'||r.status==='failed' })[f.status];
+  const rows = S.rows.filter(r => (!f.language || r.language === f.language) && (!f.channel || r.channel === f.channel) && (!f.query || `${r.conversation_id} ${nameForRow(r)} ${(r.transcript || []).map(t => t.text).join(' ')}`.toLocaleLowerCase().includes(f.query.toLocaleLowerCase())) && statusMatches(r));
   if (!S.sort) return rows;
   // Stable sort by score; conversations without a score stay at the end in both directions.
   const direction = S.sort === 'asc' ? 1 : -1;
@@ -124,6 +125,7 @@ function renderRows() {
   $('#select-all').checked = rows.length > 0 && rows.every(r => S.selected.has(r.conversation_id));
   $('#select-all').indeterminate = rows.some(r => S.selected.has(r.conversation_id)) && !$('#select-all').checked;
   $('#evaluate-selected').disabled = !S.selected.size || S.busy;
+  $('#selection-toolbar').hidden = !S.selected.size;
   $('#evaluate-selected').textContent = S.selected.size ? t('Оценить выбранные ({count}) ↗',{count:S.selected.size}) : t('Оценить выбранные ↗');
 }
 function renderDialog() {
@@ -179,6 +181,7 @@ function updateEditor(target) {
   S.dirty=true;
   if($('#dirty-label')) {$('#dirty-label').textContent=t('Есть изменения');$('#dirty-label').classList.add('badge-amber');}
   if($('#weight-total')) $('#weight-total').textContent=num(S.editor.criteria.filter(c=>!c.gross_error).reduce((sum,c)=>sum+Number(c.weight),0));
+  if(field==='title'&&c&&$('#criterion-heading')) $('#criterion-heading').textContent=c.title || t('Критерий {number}',{number:String(S.criterionIndex+1).padStart(2,'0')});
   if(field==='steps'&&$('#scale-preview')) ui.scale(c?.scale);
   if(['answer_type','gross_error','na_allowed'].includes(field)) renderEditor();
 }
@@ -211,6 +214,8 @@ function renderAppeals() { ui.appeals({appeals:S.appeals,filter:S.appealFilter,t
 async function showReview(id) {
   const appeal=S.appeals.find(a=>a.id===id);
   const area=document.getElementById(`review-${id}`);
+  const evidence=document.getElementById(`appeal-evidence-${id}`);
+  if(evidence)evidence.open=true;
   area.hidden=false;ui.reviewMessage(id,'Загрузка оценки…');
   try {
     const ev=await api.getEvaluation(appeal.evaluation_id);
@@ -360,6 +365,7 @@ window.addEventListener('hashchange',async()=>{
 function showFragmentTurn(appealId, turn) {
   const row=document.getElementById(`appeal-${appealId}-turn-${turn}`);
   if(!row)return;
+  const evidence=row.closest('details');if(evidence)evidence.open=true;
   document.querySelectorAll('.appeal-fragment li.highlight').forEach(item=>item.classList.remove('highlight'));
   row.classList.add('highlight');
   row.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'nearest'});

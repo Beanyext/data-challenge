@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useImperativeHandle, useLayoutEffect, useRef, useState, type Ref } from 'react';
 import { flushSync } from 'react-dom';
 import type { Appeal, Checklist, Criterion, CriterionResult, DialogRecord, Evaluation, Section } from './types';
 import { Icon, TurnText, label, number, transcriptReference } from './shared';
@@ -6,6 +6,9 @@ import { translate as t } from './i18n';
 import { clearLinkedEvidence } from './review-tools';
 import { animateElement } from './motion';
 import { criterionReason, firstTurn, plainTurnRefs, scoreTone } from './text';
+import { linkedMessageCriteria } from './message-analysis';
+
+export interface EvaluationNavigation { revealMessage: (turn: number) => boolean }
 
 export interface EvaluationViewProps {
   evaluation?: Evaluation | null;
@@ -13,6 +16,7 @@ export interface EvaluationViewProps {
   appeals?: Appeal[];
   dialog?: DialogRecord | null;
   demo?: boolean;
+  navigationRef?: Ref<EvaluationNavigation>;
 }
 
 type CriterionTone = 'na' | 'review' | 'critical' | 'success' | 'attention' | 'neutral';
@@ -59,26 +63,6 @@ function answerTone(item: CriterionResult, criterion?: Criterion): AnswerTone {
   return item.answer === 'yes' ? 'success' : item.answer === 'no' ? 'fail' : 'neutral';
 }
 
-function ResultNavigator({ groups, active, onNavigate }: { groups: ResultGroup[]; active: string | null; onNavigate: (id: string) => void }) {
-  const visibleGroups = groups.filter(group => group.entries.length);
-  if (!visibleGroups.length) return null;
-  return <nav className="result-navigator" id="criteria-map" tabIndex={-1} aria-label={t('Карта критериев')}>
-    <div className="result-navigator-heading"><span className="result-nav-symbol"><Icon name="list" /></span><div><h3>{t('Карта критериев')}</h3><p>{t('Выберите критерий, чтобы перейти к обоснованию.')}</p></div></div>
-    <div className="result-nav-groups">{visibleGroups.map(group => <div className="result-nav-group" key={group.id}>
-      <div className="result-nav-section">{group.name}</div>
-      <div className="result-nav-items">{group.entries.map(({ item, definition, index }) => {
-        const tone = criterionTone(item, definition);
-        return <button type="button" className={`result-nav-item result-nav-${tone}`} key={`${item.criterion_id}-${index}`} aria-controls={`criterion-${item.criterion_id}`} aria-current={active === item.criterion_id ? 'location' : undefined} onClick={() => onNavigate(item.criterion_id)}>
-          <span className="result-nav-number">{String(index + 1).padStart(2, '0')}</span>
-          <span className="result-nav-name">{definition?.title || item.criterion_id}{item.needs_review && <span className="result-nav-review">{t('Нужна проверка')}</span>}</span>
-          <span className="result-nav-answer">{criterionAnswer(item, definition)}</span>
-          <Icon name="chevron" />
-        </button>;
-      })}</div>
-    </div>)}</div>
-  </nav>;
-}
-
 function CriterionScale({ item, criterion }: { item: CriterionResult; criterion?: Criterion }) {
   const scale = criterion?.scale;
   if (criterion?.answer_type !== 'scale' || item.answer === 'na' || !scale || !Array.isArray(scale.steps)) return null;
@@ -101,7 +85,7 @@ function CriterionEvidence({ item, transcriptLength }: { item: CriterionResult; 
   const quote = (entry: (typeof evidence)[number], index: number) => {
     const turn = entry.turn;
     const valid = validTurn(turn);
-    return <div key={index} className={`result-evidence ${index === 0 ? 'result-evidence-primary' : ''}`}>
+    return <div key={index} className={`result-evidence ${index === 0 ? 'result-evidence-primary' : ''}`} data-evidence-turn={valid ? turn : undefined} tabIndex={-1}>
       <div className="result-evidence-heading"><Icon name="dialogs" /><span>{valid ? t('Реплика {n}', { n: turn + 1 }) : t('Цитата из диалога')}</span></div>
       <blockquote>«{entry.quote}»</blockquote>
       {valid ? <button className="evidence-link" data-turn={turn}>{t('Перейти к реплике')} <Icon name="arrow-right" /></button> : <span className="result-missing-reference">{t('Корректный номер реплики не указан')}</span>}
@@ -212,30 +196,12 @@ function ResultCriterion({ item, criterion, index, context, open, onToggle }: { 
   </article>;
 }
 
-function ScoreRing({ total }: { total: number | null | undefined }) {
-  const tone = scoreTone(total);
-  const radius = 52;
-  const length = 2 * Math.PI * radius;
-  const share = typeof total === 'number' ? Math.max(0, Math.min(100, total)) / 100 : 0;
-  return <svg className={`result-ring result-ring-${tone ?? 'none'}`} viewBox="0 0 120 120" width="120" height="120" role="img"
-    aria-label={typeof total === 'number' ? t('Итоговый балл: {score} из 100', { score: number(total) }) : t('Итоговый балл не рассчитан')}>
-    <circle className="result-ring-track" cx="60" cy="60" r={radius} />
-    {share > 0 && <circle className="result-ring-value" cx="60" cy="60" r={radius} strokeDasharray={`${length * share} ${length}`} transform="rotate(-90 60 60)" />}
-    <text className="result-ring-number" x="60" y="63" textAnchor="middle">{number(total)}</text>
-    <text className="result-ring-caption" x="60" y="84" textAnchor="middle">{t('из 100')}</text>
-  </svg>;
-}
-
 const sectionMax = (section: Section) => typeof section.max === 'number' ? section.max : typeof section.effective_weight === 'number' ? section.effective_weight : null;
 function ResultOverview({ evaluation, sections, names, criteriaCount }: { evaluation: Evaluation; sections: Section[]; names: Section[]; criteriaCount: number }) {
-  return <div className="result-overview" data-reveal="">
-    <div className="result-overview-score">
-      <span className="result-block-label">{t('Итоговый балл')}</span>
-      <ScoreRing total={evaluation.total} />
-    </div>
-    <div className="result-overview-body">
-      {sections.length > 0 && <>
-        <span className="result-block-label">{t('Результаты секций')}</span>
+  return <div className="result-overview">
+      <p className="result-overview-meta">{t('Чек-лист')} <strong>v{evaluation.checklist_version ?? '—'}</strong> · {t('Критериев')} <strong>{criteriaCount}</strong></p>
+      {sections.length > 0 && <details className="result-section-details">
+        <summary>{t('Результаты секций')}</summary>
         <ul className="section-bars">{sections.map((section, index) => {
           const max = sectionMax(section) as number;
           const score = typeof section.score === 'number' ? section.score : 0;
@@ -246,10 +212,8 @@ function ResultOverview({ evaluation, sections, names, criteriaCount }: { evalua
             <span className="section-bar-value"><strong>{number(section.score)}</strong> / {number(max)}</span>
           </li>;
         })}</ul>
-      </>}
+      </details>}
       {evaluation.total == null && <p className="result-overview-empty">{t('Нет применимых критериев для расчёта')}</p>}
-      <p className="result-overview-meta">{t('Чек-лист')} <strong>v{evaluation.checklist_version ?? '—'}</strong> · {t('Критериев')} <strong>{criteriaCount}</strong></p>
-    </div>
   </div>;
 }
 
@@ -304,9 +268,17 @@ function ResultLosses({ entries, context, onReveal }: { entries: CriterionEntry[
   </section>;
 }
 
-export function EvaluationView({ evaluation, checklist, appeals = [], dialog, demo = false }: EvaluationViewProps) {
+export function EvaluationView({ evaluation, checklist, appeals = [], dialog, demo = false, navigationRef }: EvaluationViewProps) {
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
-  const [active, setActive] = useState<string | null>(null);
+  useImperativeHandle(navigationRef, () => ({
+    revealMessage(turn) {
+      const links = linkedMessageCriteria(evaluation ?? null, turn, dialog?.transcript?.length || 0);
+      const link = links.find(item => item.kind === 'evidence') || links.find(item => item.kind === 'reference') || links[0];
+      if (!link) return false;
+      reveal(link.item.criterion_id, turn);
+      return true;
+    },
+  }));
   if (!evaluation) return <>
     <div className="panel-heading"><h2>{t('Оценка качества')}</h2></div>
     <div className="empty-state"><div className="empty-symbol"><Icon name="list" /></div><h2>{t('Оценка ещё не выполнена')}</h2><p>{t('Выберите чек-лист и запустите оценку. Здесь появятся ответы, баллы и доказательства.')}</p></div>
@@ -333,7 +305,7 @@ export function EvaluationView({ evaluation, checklist, appeals = [], dialog, de
   }
   const revisions = appeals.filter(appeal => appeal.evaluation_id === evaluation.id && appeal.decision);
   const original = evaluation.original_total;
-  const hasRevision = typeof original === 'number' || revisions.length > 0;
+  const hasRevision = typeof original === 'number' && original !== evaluation.total || revisions.length > 0 || criteria.some(item => item.decision);
   const sectionScores = Array.isArray(evaluation.sections) ? evaluation.sections : [];
   const barSections = sectionScores.filter(section => (sectionMax(section) ?? 0) > 0);
   const ungroupedScores = sectionScores.filter(section => !barSections.includes(section) && !groups.some(group => group.id === section.id && group.entries.length));
@@ -343,18 +315,29 @@ export function EvaluationView({ evaluation, checklist, appeals = [], dialog, de
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
-  // Moving to a criterion from the map, the summary or a link opens its details first, then focuses the card.
-  function reveal(id: string) {
-    flushSync(() => { setActive(id); setExpanded(previous => previous.has(id) ? previous : new Set(previous).add(id)); });
+  // Reuse the same result for both the summary and transcript navigation.
+  function reveal(id: string, turn?: number) {
+    flushSync(() => { setExpanded(previous => previous.has(id) ? previous : new Set(previous).add(id)); });
     const target = document.getElementById(`criterion-${id}`);
     if (!target) return;
     clearLinkedEvidence();
-    target.focus({ preventScroll: true });
-    target.scrollIntoView({ block: 'start', behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    let destination: HTMLElement = target;
+    if (turn != null) {
+      target.classList.add('evidence-selected');
+      document.getElementById(`turn-${turn}`)?.classList.add('highlight');
+      const quote = target.querySelector<HTMLElement>(`[data-evidence-turn="${turn}"]`);
+      destination = target.querySelector<HTMLElement>('.result-reason') || target;
+      // A matching quote may be inside the existing additional-evidence disclosure.
+      const details = quote?.closest('details');
+      if (details && target.contains(details)) details.open = true;
+      destination.tabIndex = -1;
+    }
+    destination.focus({ preventScroll: true });
+    destination.scrollIntoView({ block: 'start', behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   }
   return <>
     <div className="panel-heading result-panel-heading">
-      <div><span className="result-eyebrow">{t('РЕЗУЛЬТАТ ПРОВЕРКИ')}</span><h2>{t('Оценка качества')}</h2></div>
+      <h2>{t('Оценка качества')}</h2>
       <span className={`badge ${demo ? 'badge-amber' : 'badge-green'}`}>{demo ? t('Учебная оценка') : evaluation.model || t('AI-оценка')}</span>
     </div>
     <ResultOverview evaluation={evaluation} sections={barSections} names={sections} criteriaCount={criteria.length} />
@@ -373,8 +356,7 @@ export function EvaluationView({ evaluation, checklist, appeals = [], dialog, de
       <span className="result-block-label">{t('Баллы по секциям')}</span>
       <div className="section-results">{ungroupedScores.map((section, index) => <span className="section-result" key={`${section.id}-${index}`}>{section.name || sections.find(candidate => candidate.id === section.id)?.name || section.id} <strong>{number(section.score)}</strong></span>)}</div>
     </div>}
-    <ResultNavigator groups={groups} active={active} onNavigate={reveal} />
-    <div className="result-groups">{groups.filter(group => group.entries.length).map((group, index) => {
+    <div className="result-groups" id="criteria-map" tabIndex={-1} role="region" aria-label={t('Карта критериев')}>{groups.filter(group => group.entries.length).map((group, index) => {
       const score = sectionScores.find(section => section.id === group.id);
       const critical = group.entries.some(entry => entry.definition?.gross_error);
       const max = score ? sectionMax(score) : null;

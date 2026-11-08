@@ -110,7 +110,7 @@ async (originalPage) => {
     await page.getByRole('button', { name: '＋ Добавить критерий', exact: true }).click();
     await page.locator('[data-criterion=title]').fill('Критерий API');
     await page.locator('[data-criterion=description]').fill('Правило новой версии, сохранённое тестовым сервером.');
-    await page.getByRole('button', { name: 'Сохранить версию ↗', exact: true }).click();
+    await page.getByRole('button', { name: 'Сохранить версию', exact: true }).click();
     await page.getByText('Сохранено', { exact: true }).waitFor();
     check(counts.checklistPosts === 1, 'Checklist saved exactly once');
     check((await page.locator('#choose-checklist').inputValue()) === 'api-server-assigned-id@1', 'Server-assigned checklist remains selected after save');
@@ -127,12 +127,15 @@ async (originalPage) => {
     const comment = 'Учебное обращение «API» & <script>window.__apiUnsafe=1</script>';
     await page.getByRole('textbox', { name: 'Почему вы не согласны' }).fill(comment);
     await page.getByRole('button', { name: 'Подать апелляцию', exact: true }).click();
+    await page.locator('#criterion-c01').getByRole('button', { name: 'Апелляция подана', includeHidden: true }).waitFor({ state: 'attached' });
+    if (await page.locator('#criterion-c01 .result-row').getAttribute('aria-expanded') === 'false') await page.locator('#criterion-c01 .result-row').click();
     await page.locator('#criterion-c01').getByRole('button', { name: 'Апелляция подана' }).waitFor();
     await page.getByRole('link', { name: /Апелляции/ }).click();
     await page.getByText(comment, { exact: true }).waitFor();
     check(appeals[0].comment === comment, 'Appeal mock stores actual posted comment');
     check(!await page.evaluate(() => window.__apiUnsafe), 'API response text must remain escaped');
     await page.getByRole('button', { name: 'Рассмотреть', exact: true }).click();
+    check(await page.locator('.appeal-evidence').evaluate(node => node.open), 'Review opens the saved evidence');
     await page.getByRole('textbox', { name: 'Причина решения' }).fill('Подтверждено на учебной фикстуре.');
     await page.getByRole('button', { name: 'Сохранить решение', exact: true }).click();
     await waitForNode(() => counts.decisionPosts === 1, 'Appeal decision POST missing');
@@ -141,8 +144,8 @@ async (originalPage) => {
 
     await page.getByRole('link', { name: /Диалоги/ }).click();
     await page.getByRole('button', { name: 'Открыть api-qa-001', exact: true }).click();
-    await page.locator('#evaluation-checklist').selectOption('api-server-assigned-id');
     await page.locator('[data-action=evaluate-dialog]').click();
+    await page.locator('#evaluate-form select[name=checklistId]').selectOption('api-server-assigned-id');
     await page.getByRole('checkbox', { name: /Подтверждаю запуск AI-оценки/ }).check();
     await page.locator('#evaluate-form button[type=submit]').click();
     await firstPost;
@@ -178,7 +181,7 @@ async (originalPage) => {
 
     listMode = 'error';
     await page.getByRole('link', { name: /Диалоги/ }).click();
-    await page.getByRole('heading', { name: 'Нет подключения к данным', exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'Не удалось загрузить раздел', exact: true }).waitFor();
     await page.getByText('Тестовый API временно недоступен.', { exact: true }).waitFor();
     check(!await page.locator('#demo-banner').isVisible(), 'HTTP failure must not enable demo');
     listMode = 'normal';
@@ -186,7 +189,7 @@ async (originalPage) => {
     await page.getByRole('heading', { name: 'Диалоги', exact: true }).waitFor();
     listMode = 'malformed';
     await page.getByRole('link', { name: 'Чек-листы', exact: true }).click();
-    await page.getByRole('heading', { name: 'Нет подключения к данным', exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'Не удалось загрузить раздел', exact: true }).waitFor();
     await page.getByText('Сервер вернул неожиданный формат списка. Проверьте контракт API.', { exact: true }).waitFor();
     check(!await page.locator('#demo-banner').isVisible(), 'Malformed API data must not enable demo');
     results.push('HTTP 503 and malformed API response show errors, retry works, no silent demo fallback');

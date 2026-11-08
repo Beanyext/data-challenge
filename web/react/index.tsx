@@ -49,7 +49,7 @@ export const ui = {
       return true;
     } }).catch(() => { failedReload(); return false; })}/>);
   },
-  loading: () => page(<LoadingView/>, true),
+  loading: () => page(<LoadingView section={location.hash.slice(1).split('/')[0] || 'dialogs'}/>, true),
   error: (message: string) => page(<ErrorView message={localizeMessage(message)}/>),
   dialogs: (props: ComponentProps<typeof DialogsView>) => page(<DialogsView {...props}/>),
   dialog: (props: ComponentProps<typeof DialogView>) => page(<DialogView {...props}/>),
@@ -65,7 +65,7 @@ export const ui = {
     slot('list-selection', <SelectionSummary count={selected.size}/>);
     slot('list-empty', totalRows
       ? <EmptyState title={t('Ничего не найдено')} text={t('Измените запрос или сбросьте фильтры.')} actions={<button className="btn" data-action="reset-filters">{t('Сбросить фильтры')}</button>}/>
-      : <EmptyState title={t('Добавьте первый диалог')} text={t('Импортируйте набор по group_id или загрузите транскрипт в JSON.')} actions={<button className="btn btn-primary" data-action="import">{t('Импорт набора')}</button>}/>);
+      : <EmptyState title={t('Добавьте первый диалог')} text={t('Импортируйте набор по group_id или загрузите транскрипт в JSON.')} actions={<button className="btn btn-primary" data-action="import">{t('Импорт по группе')}</button>}/>);
   },
   scale: (scale?: Scale | null) => slot('scale-preview', <ScalePreview scale={scale}/>),
   estimate: (health: Health | null, count: number) => slot('evaluate-estimate', <EstimateNote health={health} count={count}/>),

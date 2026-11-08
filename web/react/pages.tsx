@@ -2,13 +2,13 @@ import type { ReactNode } from 'react';
 import type { Appeal, Checklist, DialogRecord, Evaluation, Filters, Health, ScoreSort } from './types';
 import { Icon, EmptyState, channel, dialogTitle, label, number } from './shared';
 import { Slot } from './slots';
-import { EvaluationView } from './result';
 import { useState } from 'react';
 import { ActiveFilters, DensitySwitch, readDensity, SelectionSummary } from './list-tools';
-import { PrintButton, ReviewSummary } from './review-tools';
+import { PrintButton } from './review-tools';
 import { PrintReport } from './print-report';
+import { TranscriptWorkspace } from './transcript';
 import { translate as t, translatePlural, formatDecimal } from './i18n';
-import { plainTurnRefs, scoreTone, turnTime } from './text';
+import { plainTurnRefs, scoreTone } from './text';
 
 export function StatusBadge({ record }: { record: DialogRecord }) {
   const status = record.status || (record.evaluation_id ? 'completed' : 'pending');
@@ -63,37 +63,50 @@ export function ScoreHeader({ sort }: { sort: ScoreSort }) {
 }
 export function DialogsView({ rows, stats, filters, sort = null }: { rows: DialogRecord[]; stats: ListStats; filters: Filters; sort?: ScoreSort }) {
   const [density, setDensity] = useState(readDensity);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   return <>
-    <div className="page-heading page-heading-compact" data-reveal><div><h1>{t('Диалоги')}</h1></div><div className="actions"><button className="btn" data-action="import"><Icon name="download"/>{t('Импорт набора')}</button><button className="btn" data-action="upload"><Icon name="upload"/>{t('Загрузить JSON')}</button></div></div>
+    <div className="page-heading page-heading-compact" data-reveal><div><h1>{t('Диалоги')}</h1></div><div className="actions"><button className="btn" data-action="import"><Icon name="download"/>{t('Импорт по группе')}</button><button className="btn" data-action="upload"><Icon name="upload"/>{t('Загрузить файл')}</button></div></div>
     <Slot name="dialog-kpis" fallback={<DialogKpis stats={stats} status={filters.status}/>}/>
     <section className="panel dialog-list" data-density={density} data-reveal><div className="panel-heading"><h2>{t('Все разговоры')} <span className="muted small">/ {rows.length}</span></h2><DensitySwitch value={density} onChange={setDensity}/></div>
       <div className="filters"><label className="search-field"><span className="filter-label">{t('Поиск диалога')}</span><span className="search-input"><span aria-hidden="true"><Icon name="search"/></span><input id="search-dialogs" type="search" placeholder={t('Найти по ID или содержимому')} defaultValue={filters.query}/></span></label>
+        <button type="button" className="btn mobile-filter-toggle" aria-expanded={filtersOpen} aria-controls="additional-filters" onClick={() => setFiltersOpen(!filtersOpen)}>{t('Фильтры')}<Icon name="chevron"/></button>
+        <div id="additional-filters" className={`additional-filters ${filtersOpen ? 'is-open' : ''}`}>
         <label><span className="filter-label">{t('Канал')}</span><select data-filter="channel" defaultValue={filters.channel}><option value="">{t('Все каналы')}</option><option value="agent chat">{t('Чаты')}</option><option value="voice call">{t('Звонки')}</option></select></label>
         <label><span className="filter-label">{t('Язык')}</span><select data-filter="language" defaultValue={filters.language}><option value="">{t('Все языки')}</option><option value="RU">{t('Русский')}</option><option value="KZ">{t('Қазақша')}</option><option value="EN">{t('English')}</option></select></label>
-        <label><span className="filter-label">{t('Статус оценки')}</span><select data-filter="status" defaultValue={filters.status}><option value="">{t('Все статусы')}</option><option value="completed">{t('С оценкой')}</option><option value="pending">{t('Без оценки')}</option><option value="gross">{t('Грубая ошибка')}</option></select></label>
-      </div><Slot name="active-filters" fallback={<ActiveFilters filters={filters}/>}/>
-      <div className="list-toolbar"><Slot name="list-selection" fallback={<SelectionSummary count={0}/>}/><button id="evaluate-selected" className="btn btn-primary" data-action="evaluate-selected" disabled>{t('Оценить выбранные')} <Icon name="arrow-right"/></button></div>
+        <label><span className="filter-label">{t('Статус оценки')}</span><select data-filter="status" defaultValue={filters.status}><option value="">{t('Все статусы')}</option><option value="completed">{t('С оценкой')}</option><option value="pending">{t('Без оценки')}</option><option value="gross">{t('Грубая ошибка')}</option><option value="review">{t('Нужна проверка')}</option><option value="appeal">{t('Есть апелляция')}</option><option value="failed">{t('Ошибка оценки')}</option></select></label>
+      </div></div><Slot name="active-filters" fallback={<ActiveFilters filters={filters}/>}/>
+      <div className="list-toolbar" id="selection-toolbar" hidden><Slot name="list-selection" fallback={<SelectionSummary count={0}/>}/><button id="evaluate-selected" className="btn btn-primary" data-action="evaluate-selected" disabled>{t('Оценить выбранные')} <Icon name="arrow-right"/></button></div>
       <div className="table-scroll" role="region" aria-label={t('Список диалогов')} tabIndex={0}><table><thead><tr><th data-select-label={t("Выбрать все диалоги")}><input id="select-all" type="checkbox" aria-label={t('Выбрать все видимые диалоги')}/></th><th>{t('Диалог')}</th><th>{t('Канал')}</th><th>{t('Язык')}</th><th>{t('Статус')}</th><Slot name="score-heading" fallback={<ScoreHeader sort={sort}/>}/><th><span className="sr-only">{t('Открыть')}</span></th></tr></thead><tbody id="dialog-rows"><Slot name="dialog-rows"/></tbody></table></div>
       <div id="list-empty" hidden><Slot name="list-empty"/></div><div className="table-foot"><span id="visible-count"/><span>{t('Оценка по выбранному чек-листу')}</span></div>
     </section>
   </>;
 }
 
+export function DialogWorkspaceSummary({ evaluation }: { evaluation: Evaluation }) {
+  const criteria = Array.isArray(evaluation.criteria) ? evaluation.criteria : [];
+  return <aside className="review-summary dialog-summary" aria-label={t('Краткая сводка оценки')}>
+    <div className="review-summary-score"><span>{t('Итоговый балл')}</span><strong>{number(evaluation.total)}<span> / 100</span></strong></div>
+    <div className="review-summary-statuses">
+      {evaluation.total == null && <span className="review-summary-empty">{t('Нет применимых критериев для расчёта')}</span>}
+      {evaluation.gross_error && <span className="badge badge-red"><Icon name="alert"/>{t('Грубая ошибка')}</span>}
+      {criteria.some(item => item.needs_review) && <span className="badge badge-amber">{t('Нужна проверка')}</span>}
+    </div>
+  </aside>;
+}
 export function DialogView({ record, evaluation, checklist, checklists, appeals, demo, busy }: { record: DialogRecord; evaluation: Evaluation | null; checklist?: Checklist; checklists: Checklist[]; appeals: Appeal[]; demo: boolean; busy: boolean }) {
-  const roles: Record<string, string> = { operator: t('Оператор'), client: t('Клиент'), bot: t('Бот'), system: t('Система') };
-  const transcript = record.transcript || [];
   return <><div className="dialog-workspace">
     <a href="#dialogs" className="back-link"><Icon name="arrow-left"/> {t('Все диалоги')}</a>
-    <div className="detail-heading" data-reveal><div><h1>{dialogTitle(record, 'Карточка диалога')}</h1><div className="detail-meta"><span className="muted small mono">{record.conversation_id}</span><span className="badge">{channel(record.channel)}</span><span className="badge">{record.language}</span><StatusBadge record={{ ...record, evaluation_id: evaluation?.id, total: evaluation?.total }}/></div></div><div className="detail-actions"><PrintButton/><label><span className="sr-only">{t('Чек-лист для оценки')}</span><select id="evaluation-checklist" defaultValue={evaluation?.checklist_id}>{checklists.map(item => <option key={`${item.id}@${item.version}`} value={item.id}>{item.name} · v{item.version}</option>)}</select></label><button className="btn btn-primary" data-action="evaluate-dialog" disabled={busy || !checklists.length}>{t(evaluation ? 'Оценить заново' : 'Оценить диалог')} <Icon name="arrow-right"/></button></div></div>
-    {evaluation && <ReviewSummary evaluation={evaluation}/>}
-    <div className="split-view detail-top"><section className="panel" data-reveal><div className="panel-heading"><h2>{t('Транскрипт')}</h2><span className="muted small">{t('{count} реплик', { count: transcript.length })}</span></div>
-      {record.channel === 'voice call' && <div className="audio-block" id="audio-block"><Slot name="audio-block" fallback={<><button className="btn btn-small" data-action="audio">{t('Загрузить запись')}</button><p className="audio-caption">{t('Запись загружается по свежей ссылке.')}</p></>}/></div>}
-      <div className="quiet-line">{t('Оценивается оператор. Бот и система дают контекст.')}</div><div className="transcript" id="transcript">{transcript.map((turn, index) => <article id={`turn-${index}`} className={`turn turn-${Object.hasOwn(roles, turn.speaker) ? turn.speaker : 'system'}`} tabIndex={-1} key={index}><div className="turn-meta"><strong>{roles[turn.speaker] || turn.speaker}</strong><span>№ {index + 1}{turnTime(turn) && ` · ${turnTime(turn)}`}</span><span className="turn-evidence-label">{t('Доказательство')}</span></div><p>{turn.text}</p></article>)}</div>
-    </section><section className="panel" id="evaluation-panel" data-reveal><EvaluationView evaluation={evaluation} checklist={checklist} appeals={appeals} dialog={record} demo={demo}/></section></div>
+    <div className="detail-heading" data-reveal><div className="detail-identity"><div><h1>{dialogTitle(record, 'Карточка диалога')}</h1><div className="detail-meta"><span className="muted small mono">{record.conversation_id}</span><span className="badge">{channel(record.channel)}</span><span className="badge">{record.language}</span><StatusBadge record={{ ...record, evaluation_id: evaluation?.id, total: evaluation?.total }}/></div></div>{evaluation && <DialogWorkspaceSummary evaluation={evaluation}/>}</div><div className="detail-actions"><PrintButton/><input type="hidden" id="evaluation-checklist" value={checklists.find(item => item.id === evaluation?.checklist_id)?.id || checklists[0]?.id || ''}/><button className={`btn ${evaluation ? '' : 'btn-primary'}`} data-action="evaluate-dialog" disabled={busy || !checklists.length}>{t(evaluation ? 'Оценить заново' : 'Оценить диалог')} <Icon name="arrow-right"/></button></div></div>
+    <TranscriptWorkspace key={record.conversation_id} record={record} evaluation={evaluation} checklist={checklist} appeals={appeals} demo={demo}/>
   </div><PrintReport record={record} evaluation={evaluation} checklist={checklist} appeals={appeals} demo={demo}/></>;
 }
-export function LoadingView() { return <div className="panel loading" aria-label={t('Загрузка')} aria-busy="true"><div className="skeleton wide"/><div className="skeleton"/><div className="skeleton"/><div className="skeleton wide"/></div>; }
-export function ErrorView({ message }: { message: string }) { return <><div className="page-heading" data-reveal><div><h1>{t('Нет подключения к данным')}</h1><p>{t('Интерфейс работает, но сервер пока не ответил.')}</p></div></div><section className="panel" data-reveal><EmptyState title={t('Не удалось получить данные')} text={message} actions={<><button className="btn btn-primary" data-action="retry">{t('Повторить')}</button><button className="btn" data-action="settings">{t('Настроить API')}</button><button className="btn btn-ghost" data-action="demo">{t('Открыть учебный пример')}</button></>}/></section></>; }
+export function LoadingView({ section = 'dialogs' }: { section?: string }) {
+  const paired = section === 'dialog' || section === 'checklists';
+  return <div className={paired ? `loading-workspace ${section === 'checklists' ? 'loading-editor' : ''}` : 'loading-list'} role="status" aria-label={t('Загрузка')} aria-busy="true">
+    {Array.from({ length: paired ? 2 : 1 }, (_, index) => <div className="panel loading" key={index} aria-hidden="true"><div className="skeleton wide"/>{Array.from({ length: section === 'appeals' ? 3 : 5 }, (_, row) => <div className={`skeleton ${row % 2 ? 'wide' : ''}`} key={row}/>)}</div>)}
+  </div>;
+}
+export function ErrorView({ message }: { message: string }) { return <><div className="page-heading" data-reveal><div><h1>{t('Не удалось загрузить раздел')}</h1></div></div><section className="panel" data-reveal><EmptyState title={t('Не удалось получить данные')} text={message} actions={<><button className="btn btn-primary" data-action="retry">{t('Повторить')}</button><button className="btn" data-action="settings">{t('Настройки подключения')}</button><button className="btn btn-ghost" data-action="demo">{t('Открыть учебный пример')}</button></>}/></section></>; }
 
 /** Price and duration of a run, from the server's recent real evaluations. Shown above the paid-run confirmation. */
 export function EstimateNote({ health, count }: { health?: Health | null; count: number }) {

@@ -71,19 +71,19 @@ export function ChecklistEditor({ checklist: cl, checklists, criterionIndex, dir
           <div className="checklist-name"><label>{t('Название чек-листа')}<input data-edit="name" defaultValue={cl.name} required maxLength={160} /></label></div>
           {c ? <Fragment key={editorKey}>
             <div className="editor-title-row">
-              <div><span className="editor-eyebrow">{t('Настройка критерия')} · {c.id}</span><h2>{t('Критерий {number}', { number: String(criterionIndex + 1).padStart(2, '0') })}</h2></div>
+              <div><span className="editor-eyebrow">{t('Настройка критерия')} · {c.id}</span><h2 id="criterion-heading">{c.title || t('Критерий {number}', { number: String(criterionIndex + 1).padStart(2, '0') })}</h2></div>
               <button className="btn btn-small btn-ghost danger" data-action="remove-criterion">{t('Удалить критерий')}</button>
             </div>
             <div className="editor-groups">
               <fieldset className="editor-fieldset">
-                <legend><span className="editor-step" aria-hidden="true">01</span>{t('Формулировка')}</legend>
+                <legend>{t('Формулировка')}</legend>
                 <div className="field-grid">
                   <label className="full">{t('Название критерия')}<input data-criterion="title" defaultValue={c.title} required maxLength={200} /></label>
                   <label className="full">{t('Что считается выполнением')}<textarea data-criterion="description" required defaultValue={c.description} /><span className="editor-help">{t('Опишите действие оператора и условия, при которых критерий выполнен.')}</span></label>
                 </div>
               </fieldset>
               <fieldset className="editor-fieldset">
-                <legend><span className="editor-step" aria-hidden="true">02</span>{t('Оценка и вес')}</legend>
+                <legend>{t('Оценка и вес')}</legend>
                 <div className="field-grid">
                   <label>{t('Тип ответа')}<select data-criterion="answer_type" defaultValue={c.answer_type}><option value="binary">{t('Да / Нет')}</option><option value="scale">{t('Числовая шкала')}</option></select></label>
                   <label>{t('Вес критерия')}<input data-criterion="weight" type="number" min="0" max="100" step="0.1" defaultValue={c.weight} disabled={Boolean(c.gross_error)} /><span className="editor-help">{t(c.gross_error ? 'Грубая ошибка отмечается отдельно от баллов.' : 'Вклад критерия в итоговую оценку.')}</span></label>
@@ -94,7 +94,7 @@ export function ChecklistEditor({ checklist: cl, checklists, criterionIndex, dir
                 </div>
               </fieldset>
               <fieldset className="editor-fieldset">
-                <legend><span className="editor-step" aria-hidden="true">03</span>{t('Применимость')}</legend>
+                <legend>{t('Применимость')}</legend>
                 <div className="field-grid">
                   <label className="full">{t('Раздел')}<select data-criterion="section_id" defaultValue={c.section_id}>{cl.sections.map(section => <option key={section.id} value={section.id}>{section.name}</option>)}</select></label>
                   <label className="full editor-option"><input data-criterion="na_allowed" type="checkbox" defaultChecked={Boolean(c.na_allowed)} /><span><strong>{t('Разрешить ответ N/A')}</strong><small>{t('Критерий может быть неприменим к конкретному диалогу.')}</small></span><span className="badge editor-neutral" aria-hidden="true">N/A</span></label>
@@ -102,7 +102,7 @@ export function ChecklistEditor({ checklist: cl, checklists, criterionIndex, dir
                 </div>
               </fieldset>
               <fieldset className="editor-fieldset">
-                <legend><span className="editor-step" aria-hidden="true">04</span>{t('Особые условия')}</legend>
+                <legend>{t('Особые условия')}</legend>
                 <div className="field-grid">
                   <label className="full editor-option editor-option-critical"><input data-criterion="gross_error" type="checkbox" defaultChecked={Boolean(c.gross_error)} /><span><strong>{t('Грубое нарушение')}</strong><small>{t('Отдельный флаг без баллов.')}</small></span></label>
                   <label className="full">{t('Пояснения для оценки')}<textarea data-criterion="notes" defaultValue={c.notes || ''} /></label>
@@ -144,7 +144,8 @@ function appealReference(appeal: Appeal, transcriptLength?: number) {
     return <button type="button" className="turn-ref" data-context={appeal.id} data-context-turn={turn} aria-label={t('Открыть диалог на реплике № {n}', { n })} title={t('Открыть диалог на реплике № {n}', { n })}>№ {n}</button>;
   };
 }
-const shorten = (text: unknown, limit = 200) => { const value = String(text ?? '').replace(/\s+/g, ' ').trim(); return value.length > limit ? `${value.slice(0, limit - 1).trimEnd()}…` : value; };
+const fragmentText = (text: unknown) => String(text ?? '').replace(/\s+/g, ' ').trim();
+const shorten = (text: unknown, limit = 200) => { const value = fragmentText(text); return value.length > limit ? `${value.slice(0, limit - 1).trimEnd()}…` : value; };
 
 function AppealDispute({ appeal }: { appeal: Appeal }) {
   const item = appeal.criterion;
@@ -171,6 +172,7 @@ function AppealFragment({ appeal }: { appeal: Appeal }) {
         <span className="appeal-fragment-meta">№ {turn.turn + 1} · {roles[turn.speaker ?? ''] || turn.speaker || '—'}{time && ` · ${time}`}</span>
         {isEvidence && <span className="appeal-fragment-tag">{t('Доказательство')}</span>}
         <span className="appeal-fragment-text"> — {shorten(turn.text)}</span>
+        {fragmentText(turn.text).length > 200 && <button type="button" className="text-btn appeal-full-turn" data-context={appeal.id} data-context-turn={turn.turn} aria-label={t('Перейти к полной реплике № {n}', { n: turn.turn + 1 })}>{t('Перейти к полной реплике')} <Icon name="arrow-right" /></button>}
       </li>;
     })}</ol>
   </section>;
@@ -187,12 +189,15 @@ export function AppealsView({ appeals, filter, turnCounts = {} }: { appeals: App
           <div className="appeal-meta"><span className={`badge ${appeal.status === 'open' ? 'badge-amber' : 'badge-green'}`}>{label(appeal.status)}</span><span className="muted small">{appeal.conversation_id || appeal.evaluation_id} · {appeal.criterion_id}</span></div>
           <h3>{appeal.criterion_title || appeal.criterion?.title || t('Пересмотр критерия')}</h3>
           <AppealDispute appeal={appeal} />
-          {appeal.criterion && (appeal.criterion.reason || appeal.criterion.explanation) && <p className="appeal-reason"><TurnText text={appeal.criterion.reason || appeal.criterion.explanation} reference={appealReference(appeal, turnCounts[appeal.conversation_id ?? ''])} /></p>}
           <div className={`appeal-perspectives ${appeal.decision ? 'has-decision' : ''}`}>
             <section className="appeal-statement"><h4>{t('Комментарий оператора')}</h4><p>{appeal.comment}</p></section>
             {appeal.decision && <section className="appeal-statement appeal-decision"><h4>{t('Решение проверяющего')}</h4><strong className="appeal-answer">{t('Ответ: {answer}', { answer: label(appeal.decision.answer) })}</strong><p>{appeal.decision.reason}</p></section>}
           </div>
-          <AppealFragment appeal={appeal} />
+          <details className="appeal-evidence" id={`appeal-evidence-${appeal.id}`}>
+            <summary>{t('Обоснование и фрагмент')}</summary>
+            {appeal.criterion && (appeal.criterion.reason || appeal.criterion.explanation) && <p className="appeal-reason"><TurnText text={appeal.criterion.reason || appeal.criterion.explanation} reference={appealReference(appeal, turnCounts[appeal.conversation_id ?? ''])} /></p>}
+            {appeal.fragment?.length ? <AppealFragment appeal={appeal} /> : <p className="muted small">{t('В апелляции нет фрагмента. Откройте диалог, чтобы проверить контекст.')}</p>}
+          </details>
         </div>
         <div className="actions appeal-actions"><button className="btn btn-small" data-context={appeal.id}>{t('Открыть диалог')} <Icon name="arrow-right" /></button>{appeal.status === 'open' && <button className="btn btn-small btn-primary" data-review={appeal.id}>{t('Рассмотреть')}</button>}</div>
         <div className="review-form" id={`review-${appeal.id}`} hidden><Slot name={`review-${appeal.id}`} /></div>
